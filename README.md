@@ -14,7 +14,7 @@ Each tool lives in its own folder and comes with its own README. You can clone t
 
 ## 📋 Available Tools
 
-### 1. [Binary Annotation Tool](./Binary Annotation Tool/README.md)
+### 1. [Binary Annotation Tool](./binary-annotation-tool/README.md)
 Label data points with simple Yes/No decisions. Great for tasks like sentiment, filtering, binary classification, etc.
 
 More tools will be added soon.

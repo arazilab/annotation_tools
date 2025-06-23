@@ -1,0 +1,5 @@
+{
+  "question": "Is this review positive?",
+  "fields": ["Stars", "Review"],
+  "dataFile": "sample_data.json"
+}

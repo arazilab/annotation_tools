@@ -29,7 +29,7 @@ The Binary Annotation Tool lets you label data points with a simple **Yes/No** c
 1. **Clone the repo:**
 
 ```bash
-git clone https://github.com/your-org/annotation-tools.git
+git clone https://github.com/arazilab/annotation-tools.git
 cd annotation-tools/binary-annotation-tool
 ```
 

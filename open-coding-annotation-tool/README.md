@@ -101,7 +101,7 @@ Saved annotations look like this:
 ```json
 {
   "Stars": 4,
-  "Review": "Great movie!",
+  "Review": "I loved this movie. Great story and music.",
   "annotation": ["positive", "music"]
 }
 ```

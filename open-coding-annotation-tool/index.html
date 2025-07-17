@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Open Coding Annotation Tool</title>
+  <style>
+    body {
+      display: flex;
+      font-family: sans-serif;
+      margin: 0;
+      padding: 20px;
+      gap: 20px;
+    }
+    #left-panel, #right-panel {
+      flex: 1;
+    }
+    #text-box {
+      background-color: #f0f0f0;
+      color: black;
+      padding: 20px;
+      border-radius: 10px;
+      min-height: 200px;
+      white-space: pre-wrap;
+      border: 1px solid #ccc;
+      margin-bottom: 20px;
+    }
+    #top-buttons {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    #save-status {
+      font-size: 14px;
+    }
+    .saved {
+      color: green;
+    }
+    .unsaved {
+      color: red;
+    }
+    #code-table {
+      margin-top: 10px;
+      border-collapse: collapse;
+      width: 100%;
+    }
+    #code-table td, #code-table th {
+      border: 1px solid #ddd;
+      padding: 8px;
+    }
+    #code-table th {
+      background-color: #f2f2f2;
+    }
+    #nav-buttons {
+      margin-top: 20px;
+    }
+    #nav-buttons button {
+      padding: 10px 20px;
+      margin-right: 10px;
+    }
+    #new-code {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    input[type=text] {
+      flex: 1;
+      padding: 5px;
+    }
+    .error {
+      color: red;
+      margin-top: 5px;
+    }
+    .merge-inline {
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="left-panel">
+    <div id="top-buttons">
+      <button onclick="saveAnnotations()">💾 Save</button>
+      <button onclick="saveCodebook()">📘 Save Codebook</button>
+      <button onclick="document.getElementById('fileInput').click()">📁 Open</button>
+      <span id="save-status" class="unsaved">✗ Unsaved Changes</span>
+      <input type="file" id="fileInput" style="display:none" />
+    </div>
+
+    <div id="text-box">Loading...</div>
+    <div id="counter"></div>
+    <div id="nav-buttons">
+      <button onclick="prevItem()">Previous</button>
+      <button onclick="nextItem()">Next</button>
+    </div>
+  </div>
+
+  <div id="right-panel">
+    <div><strong>New Code:</strong></div>
+    <div id="new-code">
+      <input type="text" id="codeInput" placeholder="Write your code here..." onkeydown="if(event.key==='Enter') addCode()" />
+      <button onclick="addCode()">Add</button>
+    </div>
+    <div class="error" id="errorBox"></div>
+    <div><strong>Existing codes:</strong></div>
+    <table id="code-table">
+      <thead><tr><th>Code</th><th>Count</th><th>Use</th><th>Edit</th><th>Delete</th><th>Merge</th></tr></thead>
+      <tbody id="code-list"></tbody>
+    </table>
+  </div>
+
+  <script>
+    let config, data = [], index = 0;
+    let annotations = {};
+    let codeSet = new Set();
+    let originalFileName = '';
+    let isSaved = false;
+    let activeMergeRow = null;
+
+    function updateSaveStatus() {
+      const status = document.getElementById('save-status');
+      status.textContent = isSaved ? '✓ All changes saved' : '✗ Unsaved Changes';
+      status.className = isSaved ? 'saved' : 'unsaved';
+    }
+
+    function loadFiles() {
+      fetch('config.json').then(r => r.json()).then(cfg => {
+        config = cfg;
+        originalFileName = config.dataFile;
+        return fetch(config.dataFile);
+      }).then(r => r.json()).then(json => {
+        data = json;
+        data.forEach((_, i) => {
+          annotations[i] = [];
+        });
+        render();
+      });
+    }
+
+    function render() {
+      const item = data[index];
+      const fields = config.fields.map(f => item[f] || item[f.charAt(0).toUpperCase() + f.slice(1)] || '').join('\n');
+      document.getElementById('text-box').innerText = fields;
+      updateCounter();
+      renderCodeList();
+    }
+
+    function updateCounter() {
+      const total = data.length;
+      const annotated = Object.values(annotations).filter(a => a.length > 0).length;
+      document.getElementById('counter').innerText = `Seen: ${index + 1} / ${total}, Annotated: ${annotated}, Left: ${total - annotated}`;
+    }
+
+    function addCode() {
+      const val = document.getElementById('codeInput').value.trim();
+      if (!val) return;
+      if (codeSet.has(val)) {
+        showError('Code already exists.');
+        return;
+      }
+      codeSet.add(val);
+      annotations[index].push(val);
+      document.getElementById('codeInput').value = '';
+      isSaved = false;
+      updateSaveStatus();
+      renderCodeList();
+    }
+
+    function showError(msg) {
+      const errorBox = document.getElementById('errorBox');
+      errorBox.innerText = msg;
+      setTimeout(() => errorBox.innerText = '', 3000);
+    }
+
+    function renderCodeList() {
+      const container = document.getElementById('code-list');
+      container.innerHTML = '';
+
+      const sortedCodes = Array.from(codeSet).sort((a, b) => countCodeUse(b) - countCodeUse(a));
+
+      sortedCodes.forEach(code => {
+        const tr = document.createElement('tr');
+        tr.dataset.code = code;
+
+        const td1 = document.createElement('td');
+        td1.innerText = code;
+
+        const td2 = document.createElement('td');
+        td2.innerText = countCodeUse(code);
+
+        const td3 = document.createElement('td');
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.checked = annotations[index].includes(code);
+        chk.onchange = () => toggleCode(code);
+        td3.appendChild(chk);
+
+        const td4 = document.createElement('td');
+        const editBtn = document.createElement('button');
+        editBtn.innerText = 'Edit';
+        editBtn.onclick = () => editCode(code);
+        td4.appendChild(editBtn);
+
+        const td5 = document.createElement('td');
+        const delBtn = document.createElement('button');
+        delBtn.innerText = 'Delete';
+        delBtn.onclick = () => deleteCode(code);
+        td5.appendChild(delBtn);
+
+        const td6 = document.createElement('td');
+
+        if (activeMergeRow === code) {
+          const otherCodes = sortedCodes.filter(c => c !== code);
+          const select = document.createElement('select');
+          otherCodes.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c;
+            opt.innerText = c;
+            select.appendChild(opt);
+          });
+
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.placeholder = 'New code name';
+
+          const confirm = document.createElement('button');
+          confirm.innerText = 'Confirm';
+          confirm.onclick = () => performMerge(code, select.value, input.value);
+
+          const cancel = document.createElement('button');
+          cancel.innerText = 'Cancel';
+          cancel.onclick = () => {
+            activeMergeRow = null;
+            renderCodeList();
+          };
+
+          td6.appendChild(select);
+          td6.appendChild(document.createElement('br'));
+          td6.appendChild(input);
+          td6.appendChild(document.createElement('br'));
+          td6.appendChild(confirm);
+          td6.appendChild(cancel);
+        } else {
+          const mergeBtn = document.createElement('button');
+          mergeBtn.innerText = 'Merge';
+          mergeBtn.onclick = () => {
+            activeMergeRow = code;
+            renderCodeList();
+          };
+          td6.appendChild(mergeBtn);
+        }
+
+        [td1, td2, td3, td4, td5, td6].forEach(td => tr.appendChild(td));
+        container.appendChild(tr);
+      });
+    }
+
+    function performMerge(code1, code2, newName) {
+      if (!newName.trim()) return showError('You must enter a new code name.');
+      if (codeSet.has(newName)) return showError('That code already exists.');
+
+      codeSet.add(newName);
+      codeSet.delete(code1);
+      codeSet.delete(code2);
+
+      Object.keys(annotations).forEach(i => {
+        const set = new Set(annotations[i]);
+        if (set.has(code1) || set.has(code2)) {
+          set.delete(code1);
+          set.delete(code2);
+          set.add(newName);
+          annotations[i] = Array.from(set);
+        }
+      });
+
+      isSaved = false;
+      activeMergeRow = null;
+      updateSaveStatus();
+      renderCodeList();
+    }
+
+    function toggleCode(code) {
+      const list = annotations[index];
+      const i = list.indexOf(code);
+      if (i === -1) list.push(code);
+      else list.splice(i, 1);
+      isSaved = false;
+      updateSaveStatus();
+    }
+
+    function editCode(oldCode) {
+      const newCode = prompt('Edit code:', oldCode);
+      if (!newCode || newCode === oldCode) return;
+      if (codeSet.has(newCode)) {
+        showError('That code already exists.');
+        return;
+      }
+      codeSet.delete(oldCode);
+      codeSet.add(newCode);
+      Object.keys(annotations).forEach(i => {
+        annotations[i] = annotations[i].map(c => c === oldCode ? newCode : c);
+      });
+      isSaved = false;
+      updateSaveStatus();
+      renderCodeList();
+    }
+
+    function deleteCode(code) {
+      if (!confirm(`Delete code "${code}" from all entries?`)) return;
+      codeSet.delete(code);
+      Object.keys(annotations).forEach(i => {
+        annotations[i] = annotations[i].filter(c => c !== code);
+      });
+      isSaved = false;
+      updateSaveStatus();
+      renderCodeList();
+    }
+
+    function saveAnnotations() {
+      const output = data.map((item, i) => ({
+        ...item,
+        annotation: annotations[i]
+      }));
+      const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'annotated_' + originalFileName;
+      a.click();
+      isSaved = true;
+      updateSaveStatus();
+    }
+
+    function saveCodebook() {
+      const codebook = Array.from(codeSet).map(code => ({
+        code,
+        count: countCodeUse(code)
+      }));
+      const blob = new Blob([JSON.stringify(codebook, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'codebook.json';
+      a.click();
+    }
+
+    function countCodeUse(code) {
+      return Object.values(annotations).filter(arr => arr.includes(code)).length;
+    }
+
+    function nextItem() {
+      index = Math.min(index + 1, data.length - 1);
+      render();
+    }
+
+    function prevItem() {
+      index = Math.max(index - 1, 0);
+      render();
+    }
+
+    document.getElementById('fileInput').addEventListener('change', function () {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const loadedData = JSON.parse(e.target.result);
+        data = loadedData;
+        annotations = {};
+        codeSet.clear();
+        data.forEach((item, i) => {
+          annotations[i] = item.annotation || [];
+          item.annotation.forEach(code => codeSet.add(code));
+        });
+        render();
+      };
+      reader.readAsText(this.files[0]);
+    });
+
+    window.addEventListener('beforeunload', function (e) {
+      const unsaved = Object.values(annotations).some(v => v.length === 0);
+      if (!isSaved && unsaved) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+      }
+    });
+
+    loadFiles();
+  </script>
+</body>
+</html>

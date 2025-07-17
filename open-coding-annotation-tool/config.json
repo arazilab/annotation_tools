@@ -1,0 +1,4 @@
+{
+  "fields": ["review"],
+  "dataFile": "sample_data.json"
+}

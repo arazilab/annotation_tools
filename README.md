@@ -17,4 +17,7 @@ Each tool lives in its own folder and comes with its own README. You can clone t
 ### 1. [Binary Annotation Tool](binary-annotation-tool/)
 Label data points with simple Yes/No decisions. Great for tasks like sentiment, filtering, binary classification, etc.
 
+### 2. [Open Coding Annotation Tool](open-coding-annotation-tool/)
+Assign freeform codes to text data. Supports adding, editing, deleting, and merging codes with progress tracking and codebook export.
+
 More tools will be added soon.

@@ -1,4 +1,5 @@
 {
-  "fields": ["review"],
+  "mode": "text", // can be "text", "image", or "webpage"
+  "fields": ["Review"],
   "dataFile": "sample_data.json"
 }

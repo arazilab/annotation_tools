@@ -11,6 +11,7 @@ A simple browser-based tool for open coding and qualitative annotation.
 - Automatically track how many datapoints each code appears in
 - Code suggestions and sorting by usage frequency
 - Works entirely in your browser (no installs needed)
+- Supports text, image, or webpage annotation modes
 - Save and resume progress from JSON files
 - Save codebook as a `.json` file
 
@@ -37,16 +38,39 @@ http://localhost:8000
 ### 2. Files you need
 
 - `index.html`: main annotation interface
-- `config.json`: tells the tool which fields to show
+- `config.json`: configuration for mode and fields
 - `sample_data.json`: your dataset
 
 ---
 
 ## 🔧 Sample `config.json`
 
+Choose one of the following modes: `text`, `image`, or `webpage`.
+
 ```json
 {
+  "mode": "text",
   "fields": ["Review"],
+  "dataFile": "sample_data.json"
+}
+```
+
+Example for `image` mode:
+
+```json
+{
+  "mode": "image",
+  "fields": ["Image"],
+  "dataFile": "sample_data.json"
+}
+```
+
+Example for `webpage` mode:
+
+```json
+{
+  "mode": "webpage",
+  "fields": ["URL"],
   "dataFile": "sample_data.json"
 }
 ```
@@ -59,11 +83,21 @@ http://localhost:8000
 [
   {
     "Stars": 4,
-    "Review": "I loved this movie. Great story and music."
+    "Review": "This article about cats was fascinating. I didn’t know they could have different colored eyes.",
+    "Image": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/June_odd-eyed-cat.jpg/320px-June_odd-eyed-cat.jpg",
+    "URL": "https://en.wikipedia.org/wiki/Cat"
   },
   {
-    "Stars": 2,
-    "Review": "Very slow and boring."
+    "Stars": 3,
+    "Review": "Stars are so beautiful. I spent hours reading about their lifecycle and formation.",
+    "Image": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Pleiades_large.jpg/320px-Pleiades_large.jpg",
+    "URL": "https://en.wikipedia.org/wiki/Star"
+  },
+  {
+    "Stars": 5,
+    "Review": "This article gave a great history of filmmaking. I love how cinema evolved over time.",
+    "Image": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Golde33443.jpg/320px-Golde33443.jpg",
+    "URL": "https://en.wikipedia.org/wiki/Film"
   }
 ]
 ```
@@ -101,7 +135,7 @@ Saved annotations look like this:
 ```json
 {
   "Stars": 4,
-  "Review": "I loved this movie. Great story and music.",
-  "annotation": ["positive", "music"]
+  "Review": "This article about cats was fascinating. I didn’t know they could have different colored eyes.",
+  "annotation": ["animal", "interesting"]
 }
 ```

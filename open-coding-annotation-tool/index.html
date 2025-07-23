@@ -154,29 +154,43 @@
     function render() {
       const item = data[index];
       const container = document.getElementById('text-box');
-      container.innerHTML = ''; // Clear previous content
-
-      const mode = config.mode || 'text';
+      container.innerHTML = ''; // Clear old content
+    
+      if (!config || !config.mode || !config.fields || config.fields.length === 0) {
+        container.innerText = '(Invalid config)';
+        return;
+      }
+    
+      const mode = config.mode;
       const field = config.fields[0];
-
+    
+      if (!(field in item)) {
+        container.innerText = '(Field not found in data)';
+        return;
+      }
+    
       if (mode === 'text') {
-        const content = config.fields.map(f =>
-          item[f] || item[f.charAt(0).toUpperCase() + f.slice(1)] || ''
-        ).join('\n');
-        container.innerText = content;
+        container.innerText = item[field];
         container.style.justifyContent = 'flex-start';
       } else if (mode === 'image') {
         const img = document.createElement('img');
         img.src = item[field];
         img.alt = 'Image content';
+        img.style.maxWidth = '100%';
+        img.style.height = 'auto';
         container.appendChild(img);
       } else if (mode === 'webpage') {
         const iframe = document.createElement('iframe');
         iframe.src = item[field];
+        iframe.style.width = '375px';
+        iframe.style.height = '667px';
+        iframe.style.border = '1px solid #ccc';
         container.style.justifyContent = 'center';
         container.appendChild(iframe);
+      } else {
+        container.innerText = '(Unknown mode)';
       }
-
+    
       updateCounter();
       renderCodeList();
     }

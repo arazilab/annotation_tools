@@ -20,9 +20,23 @@
       padding: 20px;
       border-radius: 10px;
       min-height: 200px;
-      white-space: pre-wrap;
       border: 1px solid #ccc;
       margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #text-box img {
+      max-width: 100%;
+      height: auto;
+    }
+    #text-box iframe {
+      border: 1px solid #ccc;
+      width: 375px;
+      height: 667px;
+      transform: scale(1);
+      transform-origin: 0 0;
     }
     #top-buttons {
       display: flex;
@@ -69,9 +83,6 @@
     }
     .error {
       color: red;
-      margin-top: 5px;
-    }
-    .merge-inline {
       margin-top: 5px;
     }
   </style>
@@ -123,23 +134,49 @@
     }
 
     function loadFiles() {
-      fetch('config.json').then(r => r.json()).then(cfg => {
-        config = cfg;
-        originalFileName = config.dataFile;
-        return fetch(config.dataFile);
-      }).then(r => r.json()).then(json => {
-        data = json;
-        data.forEach((_, i) => {
-          annotations[i] = [];
+      fetch('config.json')
+        .then(r => r.json())
+        .then(cfg => {
+          config = cfg;
+          originalFileName = config.dataFile;
+          return fetch(config.dataFile);
+        })
+        .then(r => r.json())
+        .then(json => {
+          data = json;
+          data.forEach((_, i) => {
+            annotations[i] = [];
+          });
+          render();
         });
-        render();
-      });
     }
 
     function render() {
       const item = data[index];
-      const fields = config.fields.map(f => item[f] || item[f.charAt(0).toUpperCase() + f.slice(1)] || '').join('\n');
-      document.getElementById('text-box').innerText = fields;
+      const container = document.getElementById('text-box');
+      container.innerHTML = ''; // Clear previous content
+
+      const mode = config.mode || 'text';
+      const field = config.fields[0];
+
+      if (mode === 'text') {
+        const content = config.fields.map(f =>
+          item[f] || item[f.charAt(0).toUpperCase() + f.slice(1)] || ''
+        ).join('\n');
+        container.innerText = content;
+        container.style.justifyContent = 'flex-start';
+      } else if (mode === 'image') {
+        const img = document.createElement('img');
+        img.src = item[field];
+        img.alt = 'Image content';
+        container.appendChild(img);
+      } else if (mode === 'webpage') {
+        const iframe = document.createElement('iframe');
+        iframe.src = item[field];
+        container.style.justifyContent = 'center';
+        container.appendChild(iframe);
+      }
+
       updateCounter();
       renderCodeList();
     }
@@ -147,7 +184,8 @@
     function updateCounter() {
       const total = data.length;
       const annotated = Object.values(annotations).filter(a => a.length > 0).length;
-      document.getElementById('counter').innerText = `Seen: ${index + 1} / ${total}, Annotated: ${annotated}, Left: ${total - annotated}`;
+      document.getElementById('counter').innerText =
+        `Seen: ${index + 1} / ${total}, Annotated: ${annotated}, Left: ${total - annotated}`;
     }
 
     function addCode() {

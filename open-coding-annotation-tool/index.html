@@ -182,10 +182,13 @@
       } else if (mode === 'webpage') {
         const iframe = document.createElement('iframe');
         iframe.src = item[field];
-        iframe.style.width = '375px';
-        iframe.style.height = '667px';
+        iframe.style.width = '100%'; // fills entire left panel
+        iframe.style.height = '80vh'; // takes up vertical space nicely
+        iframe.style.maxWidth = '100%';
+        iframe.style.minWidth = '375px';
         iframe.style.border = '1px solid #ccc';
-        container.style.justifyContent = 'center';
+        iframe.style.overflow = 'auto';
+        container.style.justifyContent = 'flex-start'; // left-align
         container.appendChild(iframe);
       } else {
         container.innerText = '(Unknown mode)';

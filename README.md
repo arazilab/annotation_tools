@@ -20,4 +20,7 @@ Label data points with simple Yes/No decisions. Great for tasks like sentiment, 
 ### 2. [Open Coding Annotation Tool](open-coding-annotation-tool/)
 Assign freeform codes to text data. Supports adding, editing, deleting, and merging codes with progress tracking and codebook export.
 
+### 3. [Reddit Annotation Tool](reddit-annotation-tool/)
+Specialized tool for annotating Reddit post-comment pairs. Automatically positions comment windows and supports open coding with social media-specific workflow optimizations.
+
 More tools will be added soon.

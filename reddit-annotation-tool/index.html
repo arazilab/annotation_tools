@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Reddit Annotation Tool</title>
+  <style>
+    body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto 1fr auto;
+      font-family: sans-serif;
+      margin: 0;
+      padding: 20px;
+      gap: 20px;
+      height: 100vh;
+      box-sizing: border-box;
+    }
+
+    #top-left {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    #top-right {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    #webpage-row {
+      grid-column: 1;
+      grid-row: 2;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #post-row {
+      grid-column: 2;
+      grid-row: 2;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #bottom-left {
+      grid-column: 1;
+      grid-row: 3 / 5;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #bottom-right {
+      grid-column: 2;
+      grid-row: 3 / 5;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #top-buttons {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    #save-status {
+      font-size: 14px;
+    }
+
+    .saved {
+      color: green;
+    }
+
+    .unsaved {
+      color: red;
+    }
+
+    #post-textbox {
+      background-color: #f9f9f9;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 15px;
+      height: 200px;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      margin-bottom: 10px;
+    }
+
+    #webpage-container {
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      position: relative;
+      height: 200px;
+      margin-bottom: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: #f5f5f5;
+      padding: 20px;
+      text-align: center;
+    }
+
+    #open-comment-btn {
+      padding: 15px 30px;
+      font-size: 16px;
+      background-color: #ff4500;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-bottom: 10px;
+      transition: background-color 0.3s;
+    }
+
+    #open-comment-btn:hover {
+      background-color: #ff6500;
+    }
+
+    #comment-url-display {
+      font-size: 12px;
+      color: #666;
+      word-break: break-all;
+      max-width: 100%;
+      margin-top: 10px;
+    }
+
+    #nav-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: auto;
+    }
+
+    #nav-buttons button {
+      padding: 10px 20px;
+      background-color: #ddd;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    #nav-buttons button:hover {
+      background-color: #ccc;
+    }
+
+    #coding-tools {
+      background-color: white;
+      padding: 20px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    #code-table {
+      margin-top: 10px;
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 12px;
+    }
+
+    #code-table td, #code-table th {
+      border: 1px solid #ddd;
+      padding: 4px;
+    }
+
+    #code-table th {
+      background-color: #f2f2f2;
+    }
+
+    #new-code {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+      width: 100%;
+    }
+
+    input[type=text] {
+      flex: 1;
+      padding: 5px;
+    }
+
+    .error {
+      color: red;
+      margin-top: 5px;
+    }
+
+    #counter {
+      margin-bottom: 10px;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .instruction-text {
+      font-size: 14px;
+      color: #666;
+      font-style: italic;
+      margin-top: 5px;
+    }
+
+    #auto-open-checkbox {
+      margin: 10px 0;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Left: Load/save buttons -->
+  <div id="top-left">
+    <div id="top-buttons">
+      <button onclick="saveAnnotations()">💾 Save</button>
+      <button onclick="saveCodebook()">📘 Save Codebook</button>
+      <button onclick="document.getElementById('fileInput').click()">📁 Open</button>
+      <span id="save-status" class="unsaved">✗ Unsaved Changes</span>
+      <input type="file" id="fileInput" style="display:none" />
+    </div>
+  </div>
+
+  <!-- Top Right: Simple header -->
+  <div id="top-right">
+    <div><strong>Post:</strong></div>
+  </div>
+
+  <!-- Webpage Row -->
+  <div id="webpage-row">
+    <div id="webpage-container">
+      <button id="open-comment-btn" onclick="openCommentWindow()">
+        🔗 Open Reddit Comment (Left Side)
+      </button>
+      <div id="auto-open-checkbox">
+        <input type="checkbox" id="autoOpenNext" checked>
+        <label for="autoOpenNext">Auto-open when navigating</label>
+      </div>
+      <div class="instruction-text">
+        Click to open comment in a new window positioned on the left side of your screen
+      </div>
+      <div id="comment-url-display">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Post Row -->
+  <div id="post-row">
+    <div id="post-textbox">Loading post content...</div>
+  </div>
+
+  <!-- Bottom Left: Nav buttons -->
+  <div id="bottom-left">
+    <div id="counter"></div>
+    <div id="nav-buttons">
+      <button onclick="prevItem()">Previous</button>
+      <button onclick="nextItem()">Next</button>
+    </div>
+  </div>
+
+  <!-- Bottom Right: Open coding tools -->
+  <div id="bottom-right">
+    <div id="coding-tools">
+      <div><strong>New Code:</strong></div>
+      <div id="new-code">
+        <input type="text" id="codeInput" placeholder="Write your code here..." onkeydown="if(event.key==='Enter') addCode()" />
+        <button onclick="addCode()">Add</button>
+      </div>
+      <div class="error" id="errorBox"></div>
+      <div><strong>Existing codes:</strong></div>
+      <table id="code-table">
+        <thead><tr><th>Code</th><th>Count</th><th>Use</th><th>Edit</th><th>Delete</th><th>Merge</th></tr></thead>
+        <tbody id="code-list"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let config, data = [], index = 0;
+    let annotations = {};
+    let codeSet = new Set();
+    let originalFileName = '';
+    let isSaved = false;
+    let activeMergeRow = null;
+    let currentCommentWindow = null;
+
+    function openCommentWindow(autoOpened = false) {
+      const item = data[index];
+      if (!item || !item.comment_url) {
+        if (!autoOpened) {
+          alert('No comment URL available for this item');
+        }
+        return;
+      }
+      
+      // Close previous window if it exists
+      if (currentCommentWindow && !currentCommentWindow.closed) {
+        currentCommentWindow.close();
+      }
+      
+      // Get screen dimensions
+      const screenWidth = screen.width;
+      const screenHeight = screen.height;
+      
+      // Calculate window dimensions and position for left side
+      const windowWidth = Math.floor(screenWidth * 0.45); // 45% of screen width
+      const windowHeight = screenHeight - 100; // Leave space for taskbar
+      const windowLeft = 50; // Small margin from left edge
+      const windowTop = 50; // Small margin from top
+      
+      // Window features
+      const features = [
+        `width=${windowWidth}`,
+        `height=${windowHeight}`,
+        `left=${windowLeft}`,
+        `top=${windowTop}`,
+        'resizable=yes',
+        'scrollbars=yes',
+        'location=yes',
+        'menubar=no',
+        'toolbar=yes',
+        'status=yes'
+      ].join(',');
+      
+      // Open the window with unique name based on index
+      currentCommentWindow = window.open(item.comment_url, `redditComment_${index}`, features);
+      
+      // Focus the new window
+      if (currentCommentWindow) {
+        currentCommentWindow.focus();
+        
+        // Optional: Move the main window to the right side (only on manual open)
+        if (!autoOpened) {
+          setTimeout(() => {
+            const mainWindowWidth = Math.floor(screenWidth * 0.5);
+            const mainWindowLeft = windowWidth + 100; // Position after the comment window
+            window.resizeTo(mainWindowWidth, windowHeight);
+            window.moveTo(mainWindowLeft, windowTop);
+          }, 500);
+        }
+      } else if (!autoOpened) {
+        alert('Popup blocked! Please allow popups for this site to open the Reddit comment window.');
+      }
+    }
+
+    function updateSaveStatus() {
+      const status = document.getElementById('save-status');
+      status.textContent = isSaved ? '✓ All changes saved' : '✗ Unsaved Changes';
+      status.className = isSaved ? 'saved' : 'unsaved';
+    }
+
+    function loadFiles() {
+      fetch('reddit_config.json')
+        .then(r => r.json())
+        .then(cfg => {
+          config = cfg;
+          originalFileName = config.dataFile;
+          return fetch(config.dataFile);
+        })
+        .then(r => r.json())
+        .then(json => {
+          data = json;
+          data.forEach((_, i) => {
+            annotations[i] = [];
+          });
+          render();
+        })
+        .catch(err => {
+          console.error('Error loading files:', err);
+          document.getElementById('post-textbox').innerText = 'Error loading data files. Make sure reddit_config.json and your data file exist.';
+        });
+    }
+
+    function render() {
+      const item = data[index];
+      
+      // Display comment URL
+      const urlDisplay = document.getElementById('comment-url-display');
+      if (item && item.comment_url) {
+        urlDisplay.textContent = item.comment_url;
+      } else {
+        urlDisplay.textContent = 'No comment URL available';
+      }
+
+      // Display post content in textbox
+      const postTextbox = document.getElementById('post-textbox');
+      if (item && item.post_body) {
+        postTextbox.innerText = item.post_body;
+      } else {
+        postTextbox.innerText = 'No post content available';
+      }
+
+      updateCounter();
+      renderCodeList();
+    }
+
+    function updateCounter() {
+      const total = data.length;
+      const annotated = Object.values(annotations).filter(a => a.length > 0).length;
+      document.getElementById('counter').innerText =
+        `Seen: ${index + 1} / ${total}, Annotated: ${annotated}, Left: ${total - annotated}`;
+    }
+
+    function addCode() {
+      const val = document.getElementById('codeInput').value.trim();
+      if (!val) return;
+      if (codeSet.has(val)) {
+        showError('Code already exists.');
+        return;
+      }
+      codeSet.add(val);
+      annotations[index].push(val);
+      document.getElementById('codeInput').value = '';
+      isSaved = false;
+      updateSaveStatus();
+      renderCodeList();
+    }
+
+    function showError(msg) {
+      const errorBox = document.getElementById('errorBox');
+      errorBox.innerText = msg;
+      setTimeout(() => errorBox.innerText = '', 3000);
+    }
+
+    function renderCodeList() {
+      const container = document.getElementById('code-list');
+      container.innerHTML = '';
+
+      const sortedCodes = Array.from(codeSet).sort((a, b) => countCodeUse(b) - countCodeUse(a));
+
+      sortedCodes.forEach(code => {
+        const tr = document.createElement('tr');
+        tr.dataset.code = code;
+
+        const td1 = document.createElement('td');
+        td1.innerText = code;
+
+        const td2 = document.createElement('td');
+        td2.innerText = countCodeUse(code);
+
+        const td3 = document.createElement('td');
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.checked = annotations[index].includes(code);
+        chk.onchange = () => toggleCode(code);
+        td3.appendChild(chk);
+
+        const td4 = document.createElement('td');
+        const editBtn = document.createElement('button');
+        editBtn.innerText = 'Edit';
+        editBtn.onclick = () => editCode(code);
+        td4.appendChild(editBtn);
+
+        const td5 = document.createElement('td');
+        const delBtn = document.createElement('button');
+        delBtn.innerText = 'Delete';
+        delBtn.onclick = () => deleteCode(code);
+        td5.appendChild(delBtn);
+
+        const td6 = document.createElement('td');
+
+        if (activeMergeRow === code) {
+          const otherCodes = sortedCodes.filter(c => c !== code);
+          const select = document.createElement('select');
+          otherCodes.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c;
+            opt.innerText = c;
+            select.appendChild(opt);
+          });
+
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.placeholder = 'New code name';
+
+          const confirm = document.createElement('button');
+          confirm.innerText = 'Confirm';
+          confirm.onclick = () => performMerge(code, select.value, input.value);
+
+          const cancel = document.createElement('button');
+          cancel.innerText = 'Cancel';
+          cancel.onclick = () => {
+            activeMergeRow = null;
+            renderCodeList();
+          };
+
+          td6.appendChild(select);
+          td6.appendChild(document.createElement('br'));
+          td6.appendChild(input);
+          td6.appendChild(document.createElement('br'));
+          td6.appendChild(confirm);
+          td6.appendChild(cancel);
+        } else {
+          const mergeBtn = document.createElement('button');
+          mergeBtn.innerText = 'Merge';
+          mergeBtn.onclick = () => {
+            activeMergeRow = code;
+            renderCodeList();
+          };
+          td6.appendChild(mergeBtn);
+        }
+
+        [td1, td2, td3, td4, td5, td6].forEach(td => tr.appendChild(td));
+        container.appendChild(tr);
+      });
+    }
+
+    function performMerge(code1, code2, newName) {
+      if (!newName.trim()) return showError('You must enter a new code name.');
+      if (codeSet.has(newName)) return showError('That code already exists.');
+
+      codeSet.add(newName);
+      codeSet.delete(code1);
+      codeSet.delete(code2);
+
+      Object.keys(annotations).forEach(i => {
+        const set = new Set(annotations[i]);
+        if (set.has(code1) || set.has(code2)) {
+          set.delete(code1);
+          set.delete(code2);
+          set.add(newName);
+          annotations[i] = Array.from(set);
+        }
+      });
+
+      isSaved = false;
+      activeMergeRow = null;
+      updateSaveStatus();
+      renderCodeList();
+    }
+
+    function toggleCode(code) {
+      const list = annotations[index];
+      const i = list.indexOf(code);
+      if (i === -1) list.push(code);
+      else list.splice(i, 1);
+      isSaved = false;
+      updateSaveStatus();
+    }
+
+    function editCode(oldCode) {
+      const newCode = prompt('Edit code:', oldCode);
+      if (!newCode || newCode === oldCode) return;
+      if (codeSet.has(newCode)) {
+        showError('That code already exists.');
+        return;
+      }
+      codeSet.delete(oldCode);
+      codeSet.add(newCode);
+      Object.keys(annotations).forEach(i => {
+        annotations[i] = annotations[i].map(c => c === oldCode ? newCode : c);
+      });
+      isSaved = false;
+      updateSaveStatus();
+      renderCodeList();
+    }
+
+    function deleteCode(code) {
+      if (!confirm(`Delete code "${code}" from all entries?`)) return;
+      codeSet.delete(code);
+      Object.keys(annotations).forEach(i => {
+        annotations[i] = annotations[i].filter(c => c !== code);
+      });
+      isSaved = false;
+      updateSaveStatus();
+      renderCodeList();
+    }
+
+    function saveAnnotations() {
+      const output = data.map((item, i) => ({
+        ...item,
+        annotation: annotations[i]
+      }));
+      const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'annotated_' + originalFileName;
+      a.click();
+      isSaved = true;
+      updateSaveStatus();
+    }
+
+    function saveCodebook() {
+      const codebook = Array.from(codeSet).map(code => ({
+        code,
+        count: countCodeUse(code)
+      }));
+      const blob = new Blob([JSON.stringify(codebook, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'reddit_codebook.json';
+      a.click();
+    }
+
+    function countCodeUse(code) {
+      return Object.values(annotations).filter(arr => arr.includes(code)).length;
+    }
+
+    function nextItem() {
+      if (index < data.length - 1) {
+        index++;
+        render();
+        
+        // Auto-open comment window if checkbox is checked
+        const autoOpen = document.getElementById('autoOpenNext').checked;
+        if (autoOpen) {
+          setTimeout(() => {
+            openCommentWindow(true); // true indicates auto-opened
+          }, 300); // Small delay to let render complete
+        }
+      }
+    }
+
+    function prevItem() {
+      if (index > 0) {
+        index--;
+        render();
+        
+        // Auto-open comment window if checkbox is checked
+        const autoOpen = document.getElementById('autoOpenNext').checked;
+        if (autoOpen) {
+          setTimeout(() => {
+            openCommentWindow(true); // true indicates auto-opened
+          }, 300); // Small delay to let render complete
+        }
+      }
+    }
+
+    document.getElementById('fileInput').addEventListener('change', function () {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const loadedData = JSON.parse(e.target.result);
+        data = loadedData;
+        annotations = {};
+        codeSet.clear();
+        data.forEach((item, i) => {
+          annotations[i] = item.annotation || [];
+          if (item.annotation) {
+            item.annotation.forEach(code => codeSet.add(code));
+          }
+        });
+        render();
+      };
+      reader.readAsText(this.files[0]);
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      // Arrow keys for navigation
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        nextItem();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        prevItem();
+      }
+      // Spacebar to open comment window
+      else if (e.key === ' ' && e.target.tagName !== 'INPUT') {
+        e.preventDefault();
+        openCommentWindow();
+      }
+    });
+
+    window.addEventListener('beforeunload', function (e) {
+      if (!isSaved && Object.values(annotations).some(v => v.length > 0)) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+      }
+    });
+
+    // Close comment window when main window closes
+    window.addEventListener('beforeunload', function() {
+      if (currentCommentWindow && !currentCommentWindow.closed) {
+        currentCommentWindow.close();
+      }
+    });
+
+    loadFiles();
+  </script>
+</body>
+</html>

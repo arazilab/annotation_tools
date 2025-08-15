@@ -85,6 +85,27 @@
       color: red;
       margin-top: 5px;
     }
+    /* Context textarea styles */
+    #context-box { 
+      margin-top: 12px; 
+    }
+    #contextInput {
+      width: 100%;
+      height: 120px;          /* fixed height */
+      overflow-y: auto;       /* vertical scroll */
+      overflow-x: hidden;     /* no horizontal scroll */
+      resize: none;           /* keep height fixed for users */
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-sizing: border-box;
+      background-color: #fff;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.4;
+      white-space: pre-wrap;  /* wrap long lines */
+      word-break: break-word;
+    }
   </style>
 </head>
 <body>
@@ -112,6 +133,10 @@
       <button onclick="addCode()">Add</button>
     </div>
     <div class="error" id="errorBox"></div>
+    <div id="context-box">
+      <div><strong>Context:</strong></div>
+      <textarea id="contextInput" placeholder="Add context for this item..."></textarea>
+    </div>
     <div><strong>Existing codes:</strong></div>
     <table id="code-table">
       <thead><tr><th>Code</th><th>Count</th><th>Use</th><th>Edit</th><th>Delete</th><th>Merge</th></tr></thead>
@@ -122,6 +147,7 @@
   <script>
     let config, data = [], index = 0;
     let annotations = {};
+    let contexts = {};
     let codeSet = new Set();
     let originalFileName = '';
     let isSaved = false;
@@ -146,6 +172,7 @@
           data = json;
           data.forEach((_, i) => {
             annotations[i] = [];
+            contexts[i] = ""; // default empty context for each datapoint
           });
           render();
         });
@@ -196,6 +223,8 @@
     
       updateCounter();
       renderCodeList();
+      const ctxEl = document.getElementById('contextInput');
+      if (ctxEl) ctxEl.value = contexts[index] || "";
     }
 
     function updateCounter() {
@@ -309,6 +338,18 @@
       });
     }
 
+    // Keep context synced with current index
+    document.addEventListener('DOMContentLoaded', () => {
+      const ctxEl = document.getElementById('contextInput');
+      if (ctxEl) {
+        ctxEl.addEventListener('input', function () {
+          contexts[index] = this.value;
+          isSaved = false;
+          updateSaveStatus();
+        });
+      }
+    });
+
     function performMerge(code1, code2, newName) {
       if (!newName.trim()) return showError('You must enter a new code name.');
       if (codeSet.has(newName)) return showError('That code already exists.');
@@ -373,7 +414,8 @@
     function saveAnnotations() {
       const output = data.map((item, i) => ({
         ...item,
-        annotation: annotations[i]
+        annotation: annotations[i],
+        context: contexts[i] || ""
       }));
       const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
@@ -417,9 +459,11 @@
         data = loadedData;
         annotations = {};
         codeSet.clear();
+        contexts = {};
         data.forEach((item, i) => {
-          annotations[i] = item.annotation || [];
-          item.annotation.forEach(code => codeSet.add(code));
+          annotations[i] = Array.isArray(item.annotation) ? item.annotation : [];
+          (annotations[i] || []).forEach(code => codeSet.add(code));
+          contexts[i] = typeof item.context === 'string' ? item.context : "";
         });
         render();
       };

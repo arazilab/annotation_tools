@@ -7,9 +7,10 @@ A simple browser-based tool for open coding and qualitative annotation.
 ## 🧩 Features
 
 - Annotate JSON data with multiple custom codes
-- Add, edit, delete, and **merge** codes
+- Add, edit, delete, and merge codes
 - Automatically track how many datapoints each code appears in
 - Code suggestions and sorting by usage frequency
+- Add a Context note for each datapoint (saved in JSON)
 - Works entirely in your browser (no installs needed)
 - Supports text, image, or webpage annotation modes
 - Save and resume progress from JSON files
@@ -108,7 +109,29 @@ Example for `webpage` mode:
 
 - Click **💾 Save** to export annotations  
 - Click **📁 Open** to resume from a previous file  
-- Each entry gets an `annotation` key with a list of codes
+- Each entry gets:
+  - an `annotation` key with a list of codes  
+  - a `context` key with the text entered in the **Context** box (empty string by default)
+
+---
+
+## 🗒 Context Field
+
+- Found under **New Code** input
+- Fixed height with vertical scroll
+- Stores additional notes or background information about the current datapoint
+- Saved to JSON as `"context": "your text here"`
+
+Example:
+
+```json
+{
+  "Stars": 4,
+  "Review": "This article about cats was fascinating. I didn’t know they could have different colored eyes.",
+  "annotation": ["animal", "interesting"],
+  "context": "Mention heterochromia in cats."
+}
+```
 
 ---
 
@@ -130,12 +153,13 @@ Example for `webpage` mode:
 
 ## ✅ Annotation Format
 
-Saved annotations look like this:
+Saved annotations now include both codes and optional context:
 
 ```json
 {
   "Stars": 4,
   "Review": "This article about cats was fascinating. I didn’t know they could have different colored eyes.",
-  "annotation": ["animal", "interesting"]
+  "annotation": ["animal", "interesting"],
+  "context": "Mention heterochromia in cats."
 }
 ```

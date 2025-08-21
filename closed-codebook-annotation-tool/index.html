@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Closed Codebook Annotation Tool</title>
+  <style>
+    body {
+      display: flex;
+      font-family: sans-serif;
+      margin: 0;
+      padding: 20px;
+      gap: 20px;
+    }
+    #left-panel, #right-panel { flex: 1; }
+    #text-box {
+      background-color: #f0f0f0;
+      color: black;
+      padding: 20px;
+      border-radius: 10px;
+      min-height: 200px;
+      border: 1px solid #ccc;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #text-box img { max-width: 100%; height: auto; }
+    #text-box iframe {
+      border: 1px solid #ccc;
+      width: 375px;
+      height: 667px;
+      transform: scale(1);
+      transform-origin: 0 0;
+    }
+    #top-buttons {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    #save-status { font-size: 14px; }
+    .saved { color: green; }
+    .unsaved { color: red; }
+    #code-table { margin-top: 10px; border-collapse: collapse; width: 100%; }
+    #code-table td, #code-table th { border: 1px solid #ddd; padding: 8px; }
+    #code-table th { background-color: #f2f2f2; }
+    #nav-buttons { margin-top: 20px; }
+    #nav-buttons button { padding: 10px 20px; margin-right: 10px; }
+    .error { color: red; margin-top: 5px; }
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center;
+    }
+    .modal {
+      background: white; padding: 16px; border-radius: 8px; max-width: 520px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    .modal h3 { margin-top: 0; }
+    .modal pre { white-space: pre-wrap; word-wrap: break-word; background: #fafafa; padding: 8px; border: 1px solid #eee; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div id="left-panel">
+    <div id="top-buttons">
+      <button onclick="saveAnnotations()">💾 Save</button>
+      <button onclick="saveCodebook()">📘 Save Codebook</button>
+      <button onclick="document.getElementById('fileInput').click()">📁 Open</button>
+      <span id="save-status" class="unsaved">✗ Unsaved Changes</span>
+      <input type="file" id="fileInput" style="display:none" />
+    </div>
+
+    <div id="text-box">Loading...</div>
+    <div id="counter"></div>
+    <div id="nav-buttons">
+      <button onclick="prevItem()">Previous</button>
+      <button onclick="nextItem()">Next</button>
+    </div>
+  </div>
+
+  <div id="right-panel">
+    <div><strong>Codebook (predefined):</strong></div>
+    <div class="error" id="errorBox"></div>
+    <table id="code-table">
+      <thead>
+        <tr>
+          <th>Use</th>
+          <th>Code</th>
+          <th>Count</th>
+          <th>Learn more</th>
+          <th>Edit</th>
+          <th>Delete</th>
+          <th>Merge</th>
+        </tr>
+      </thead>
+      <tbody id="code-list"></tbody>
+    </table>
+  </div>
+
+  <!-- Simple modal for Learn more -->
+  <div id="modal-backdrop" class="modal-backdrop" onclick="closeModal(event)">
+    <div id="modal" class="modal" onclick="event.stopPropagation()">
+      <h3 id="modal-title"></h3>
+      <div><strong>Definition</strong></div>
+      <pre id="modal-definition"></pre>
+      <div><strong>Example</strong></div>
+      <pre id="modal-example"></pre>
+      <div style="text-align:right; margin-top:8px;">
+        <button onclick="hideModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let config, data = [], index = 0;
+    let annotations = {};
+    let isSaved = false;
+
+    // Codebook structures
+    let codebook = [];            // [{code, definition, example}]
+    let codeOrder = [];           // [code, code, ...] order from JSON file
+    let codeSet = new Set();      // quick presence
+    let activeMergeRow = null;
+    let originalFileName = '';
+
+    function updateSaveStatus() {
+      const status = document.getElementById('save-status');
+      status.textContent = isSaved ? '✓ All changes saved' : '✗ Unsaved Changes';
+      status.className = isSaved ? 'saved' : 'unsaved';
+    }
+
+    function showError(msg) {
+      const errorBox = document.getElementById('errorBox');
+      errorBox.innerText = msg;
+      setTimeout(() => errorBox.innerText = '', 3000);
+    }
+
+    function loadFiles() {
+      fetch('config.json')
+        .then(r => r.json())
+        .then(cfg => {
+          config = cfg;
+          if (!config || !config.dataFile) {
+            throw new Error('config.json must include "dataFile"');
+          }
+          if (!config.codebookFile) {
+            throw new Error('config.json must include "codebookFile" for closed coding');
+          }
+          originalFileName = config.dataFile;
+          return Promise.all([ fetch(config.dataFile), fetch(config.codebookFile) ]);
+        })
+        .then(async ([dataRes, cbRes]) => {
+          const jsonData = await dataRes.json();
+          const cbData = await cbRes.json();
+          data = jsonData;
+
+          // Init annotations empty for each item
+          data.forEach((_, i) => { annotations[i] = []; });
+
+          // Load codebook preserving order
+          codebook = Array.isArray(cbData) ? cbData.map(x => ({
+            code: String(x.code || '').trim(),
+            definition: typeof x.definition === 'string' ? x.definition : '',
+            example: typeof x.example === 'string' ? x.example : ''
+          })) : [];
+
+          codeOrder = codebook.map(x => x.code).filter(c => c);
+          codeSet = new Set(codeOrder);
+
+          render();
+        })
+        .catch(err => {
+          document.getElementById('text-box').innerText = '(Error loading files) ' + err.message;
+        });
+    }
+
+    function render() {
+      const item = data[index];
+      const container = document.getElementById('text-box');
+      container.innerHTML = '';
+
+      if (!config || !config.mode || !config.fields || config.fields.length === 0) {
+        container.innerText = '(Invalid config)';
+        return;
+      }
+
+      const mode = config.mode;
+      const field = config.fields[0];
+
+      if (!(field in item)) {
+        container.innerText = '(Field not found in data)';
+        return;
+      }
+
+      if (mode === 'text') {
+        container.innerText = item[field];
+        container.style.justifyContent = 'flex-start';
+      } else if (mode === 'image') {
+        const img = document.createElement('img');
+        img.src = item[field];
+        img.alt = 'Image content';
+        img.style.maxWidth = '100%';
+        img.style.height = 'auto';
+        container.appendChild(img);
+      } else if (mode === 'webpage') {
+        const iframe = document.createElement('iframe');
+        iframe.src = item[field];
+        iframe.style.width = '100%';
+        iframe.style.height = '80vh';
+        iframe.style.maxWidth = '100%';
+        iframe.style.minWidth = '375px';
+        iframe.style.border = '1px solid #ccc';
+        iframe.style.overflow = 'auto';
+        container.style.justifyContent = 'flex-start';
+        container.appendChild(iframe);
+      } else {
+        container.innerText = '(Unknown mode)';
+      }
+
+      updateCounter();
+      renderCodeList();
+    }
+
+    function updateCounter() {
+      const total = data.length;
+      const annotated = Object.values(annotations).filter(a => a.length > 0).length;
+      document.getElementById('counter').innerText =
+        `Seen: ${index + 1} / ${total}, Annotated: ${annotated}, Left: ${total - annotated}`;
+    }
+
+    function countCodeUse(code) {
+      return Object.values(annotations).filter(arr => arr.includes(code)).length;
+    }
+
+    function renderCodeList() {
+      const container = document.getElementById('code-list');
+      container.innerHTML = '';
+
+      // Render in original order from codebook
+      codeOrder.forEach(code => {
+        if (!codeSet.has(code)) return; // in case deleted
+        const tr = document.createElement('tr');
+        tr.dataset.code = code;
+
+        // Use checkbox
+        const tdUse = document.createElement('td');
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.checked = annotations[index].includes(code);
+        chk.onchange = () => toggleCode(code);
+        tdUse.appendChild(chk);
+
+        const tdCode = document.createElement('td');
+        tdCode.innerText = code;
+
+        const tdCount = document.createElement('td');
+        tdCount.innerText = countCodeUse(code);
+
+        const tdMore = document.createElement('td');
+        const moreBtn = document.createElement('button');
+        moreBtn.innerText = 'Learn more';
+        moreBtn.onclick = () => showLearnMore(code);
+        tdMore.appendChild(moreBtn);
+
+        const tdEdit = document.createElement('td');
+        const editBtn = document.createElement('button');
+        editBtn.innerText = 'Edit';
+        editBtn.onclick = () => editCode(code);
+        tdEdit.appendChild(editBtn);
+
+        const tdDelete = document.createElement('td');
+        const delBtn = document.createElement('button');
+        delBtn.innerText = 'Delete';
+        delBtn.onclick = () => deleteCode(code);
+        tdDelete.appendChild(delBtn);
+
+        const tdMerge = document.createElement('td');
+        if (activeMergeRow === code) {
+          const otherCodes = codeOrder.filter(c => c !== code && codeSet.has(c));
+          const select = document.createElement('select');
+          otherCodes.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c; opt.innerText = c; select.appendChild(opt);
+          });
+          const input = document.createElement('input');
+          input.type = 'text'; input.placeholder = 'New code name';
+          const confirm = document.createElement('button');
+          confirm.innerText = 'Confirm';
+          confirm.onclick = () => performMerge(code, select.value, input.value);
+          const cancel = document.createElement('button');
+          cancel.innerText = 'Cancel';
+          cancel.onclick = () => { activeMergeRow = null; renderCodeList(); };
+          tdMerge.appendChild(select);
+          tdMerge.appendChild(document.createElement('br'));
+          tdMerge.appendChild(input);
+          tdMerge.appendChild(document.createElement('br'));
+          tdMerge.appendChild(confirm);
+          tdMerge.appendChild(cancel);
+        } else {
+          const mergeBtn = document.createElement('button');
+          mergeBtn.innerText = 'Merge';
+          mergeBtn.onclick = () => { activeMergeRow = code; renderCodeList(); };
+          tdMerge.appendChild(mergeBtn);
+        }
+
+        [tdUse, tdCode, tdCount, tdMore, tdEdit, tdDelete, tdMerge].forEach(td => tr.appendChild(td));
+        container.appendChild(tr);
+      });
+    }
+
+    function toggleCode(code) {
+      const list = annotations[index];
+      const i = list.indexOf(code);
+      if (i === -1) list.push(code); else list.splice(i, 1);
+      isSaved = false; updateSaveStatus();
+      renderCodeList();
+    }
+
+    function findCodebookIndexByCode(code) {
+      return codebook.findIndex(entry => entry.code === code);
+    }
+
+    function showLearnMore(code) {
+      const i = findCodebookIndexByCode(code);
+      const entry = i >= 0 ? codebook[i] : { definition: '', example: '' };
+      document.getElementById('modal-title').innerText = code;
+      document.getElementById('modal-definition').innerText = entry.definition || '';
+      document.getElementById('modal-example').innerText = entry.example || '';
+      showModal();
+    }
+
+    function showModal() {
+      document.getElementById('modal-backdrop').style.display = 'flex';
+    }
+    function hideModal() {
+      document.getElementById('modal-backdrop').style.display = 'none';
+    }
+    function closeModal(e) { if (e.target.id === 'modal-backdrop') hideModal(); }
+
+    function editCode(oldCode) {
+      const newCode = prompt('Edit code name:', oldCode);
+      if (!newCode || newCode === oldCode) return;
+      if (codeSet.has(newCode)) { showError('That code already exists.'); return; }
+
+      // Update sets and order
+      const idx = codeOrder.indexOf(oldCode);
+      if (idx >= 0) codeOrder[idx] = newCode;
+      codeSet.delete(oldCode); codeSet.add(newCode);
+
+      // Update codebook entry
+      const cbIdx = findCodebookIndexByCode(oldCode);
+      if (cbIdx >= 0) codebook[cbIdx].code = newCode;
+
+      // Update annotations
+      Object.keys(annotations).forEach(i => {
+        annotations[i] = annotations[i].map(c => c === oldCode ? newCode : c);
+      });
+
+      isSaved = false; updateSaveStatus(); renderCodeList();
+    }
+
+    function deleteCode(code) {
+      if (!confirm(`Delete code "${code}" from all entries?`)) return;
+      codeSet.delete(code);
+      codeOrder = codeOrder.filter(c => c !== code);
+      codebook = codebook.filter(entry => entry.code !== code);
+      Object.keys(annotations).forEach(i => {
+        annotations[i] = annotations[i].filter(c => c !== code);
+      });
+      isSaved = false; updateSaveStatus(); renderCodeList();
+    }
+
+    function performMerge(code1, code2, newName) {
+      if (!newName.trim()) return showError('You must enter a new code name.');
+      if (codeSet.has(newName)) return showError('That code already exists.');
+
+      // Add new code
+      codeSet.add(newName);
+      const insertAt = Math.min(codeOrder.indexOf(code1), codeOrder.indexOf(code2));
+      if (insertAt >= 0) codeOrder.splice(insertAt, 0, newName); else codeOrder.push(newName);
+      codebook.push({ code: newName, definition: '', example: '' });
+
+      // Remove old codes
+      [code1, code2].forEach(c => {
+        codeSet.delete(c);
+        codeOrder = codeOrder.filter(x => x !== c);
+        codebook = codebook.filter(e => e.code !== c);
+      });
+
+      // Replace across annotations
+      Object.keys(annotations).forEach(i => {
+        const set = new Set(annotations[i]);
+        if (set.has(code1) || set.has(code2)) {
+          set.delete(code1); set.delete(code2); set.add(newName);
+          annotations[i] = Array.from(set);
+        }
+      });
+
+      isSaved = false; activeMergeRow = null; updateSaveStatus(); renderCodeList();
+    }
+
+    function saveAnnotations() {
+      const output = data.map((item, i) => ({
+        ...item,
+        annotation: annotations[i]
+      }));
+      const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'annotated_' + originalFileName;
+      a.click();
+      isSaved = true; updateSaveStatus();
+    }
+
+    function saveCodebook() {
+      // Persist current codebook with definition and example in current order
+      const ordered = codeOrder
+        .filter(c => codeSet.has(c))
+        .map(code => {
+          const entry = codebook.find(e => e.code === code) || { definition: '', example: '' };
+          return { code, definition: entry.definition || '', example: entry.example || '' };
+        });
+      const blob = new Blob([JSON.stringify(ordered, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'codebook.json';
+      a.click();
+    }
+
+    function nextItem() { index = Math.min(index + 1, data.length - 1); render(); }
+    function prevItem() { index = Math.max(index - 1, 0); render(); }
+
+    document.getElementById('fileInput').addEventListener('change', function () {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const loadedData = JSON.parse(e.target.result);
+        data = loadedData;
+        annotations = {}; // reset
+        data.forEach((item, i) => {
+          annotations[i] = Array.isArray(item.annotation) ? item.annotation : [];
+        });
+        // keep current codebook
+        isSaved = false; updateSaveStatus(); render();
+      };
+      if (this.files && this.files[0]) reader.readAsText(this.files[0]);
+    });
+
+    window.addEventListener('beforeunload', function (e) {
+      if (!isSaved) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+      }
+    });
+
+    loadFiles();
+  </script>
+</body>
+</html>

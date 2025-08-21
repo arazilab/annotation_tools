@@ -1,0 +1,6 @@
+{
+  "mode": "text",
+  "fields": ["Review"],
+  "dataFile": "sample_data.json",
+  "codebookFile": "codebook.json"
+}

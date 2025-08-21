@@ -1,0 +1,20 @@
+[
+  {
+    "Stars": 4,
+    "Review": "This article about cats was fascinating. I didn’t know they could have different colored eyes.",
+    "Image": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/June_odd-eyed-cat.jpg/320px-June_odd-eyed-cat.jpg",
+    "URL": "https://en.wikipedia.org/wiki/Cat"
+  },
+  {
+    "Stars": 3,
+    "Review": "Stars are so beautiful. I spent hours reading about their lifecycle and formation.",
+    "Image": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Pleiades_large.jpg/320px-Pleiades_large.jpg",
+    "URL": "https://en.wikipedia.org/wiki/Star"
+  },
+  {
+    "Stars": 5,
+    "Review": "This article gave a great history of filmmaking. I love how cinema evolved over time.",
+    "Image": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Golde33443.jpg/320px-Golde33443.jpg",
+    "URL": "https://en.wikipedia.org/wiki/Film"
+  }
+]

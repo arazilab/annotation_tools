@@ -1,0 +1,12 @@
+[
+  {
+    "code": "animal",
+    "definition": "Mentions of animals or animal-related content.",
+    "example": "The cat had different colored eyes."
+  },
+  {
+    "code": "astronomy",
+    "definition": "References to stars, planets, or space topics.",
+    "example": "I read about star formation."
+  }
+]

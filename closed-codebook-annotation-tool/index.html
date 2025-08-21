@@ -183,37 +183,65 @@
       }
 
       const mode = config.mode;
-      const field = config.fields[0];
+      const fields = Array.isArray(config.fields) ? config.fields : [config.fields];
 
-      if (!(field in item)) {
-        container.innerText = '(Field not found in data)';
-        return;
-      }
+      // Align content to the top-left for multi-field layout
+      container.style.justifyContent = 'flex-start';
+      container.style.alignItems = 'stretch';
+      const wrapper = document.createElement('div');
+      wrapper.style.display = 'flex';
+      wrapper.style.flexDirection = 'column';
+      wrapper.style.gap = '12px';
+      container.appendChild(wrapper);
 
-      if (mode === 'text') {
-        container.innerText = item[field];
-        container.style.justifyContent = 'flex-start';
-      } else if (mode === 'image') {
-        const img = document.createElement('img');
-        img.src = item[field];
-        img.alt = 'Image content';
-        img.style.maxWidth = '100%';
-        img.style.height = 'auto';
-        container.appendChild(img);
-      } else if (mode === 'webpage') {
-        const iframe = document.createElement('iframe');
-        iframe.src = item[field];
-        iframe.style.width = '100%';
-        iframe.style.height = '80vh';
-        iframe.style.maxWidth = '100%';
-        iframe.style.minWidth = '375px';
-        iframe.style.border = '1px solid #ccc';
-        iframe.style.overflow = 'auto';
-        container.style.justifyContent = 'flex-start';
-        container.appendChild(iframe);
-      } else {
-        container.innerText = '(Unknown mode)';
-      }
+      fields.forEach(field => {
+        const section = document.createElement('div');
+        section.style.display = 'flex';
+        section.style.flexDirection = 'column';
+        section.style.gap = '6px';
+
+        const label = document.createElement('div');
+        label.style.fontWeight = 'bold';
+        label.textContent = `${field}:`;
+        section.appendChild(label);
+
+        if (!(field in item)) {
+          const missing = document.createElement('div');
+          missing.textContent = '(Field not found in data)';
+          section.appendChild(missing);
+          wrapper.appendChild(section);
+          return;
+        }
+
+        if (mode === 'text') {
+          const textEl = document.createElement('div');
+          textEl.textContent = item[field];
+          section.appendChild(textEl);
+        } else if (mode === 'image') {
+          const img = document.createElement('img');
+          img.src = item[field];
+          img.alt = `Image content for ${field}`;
+          img.style.maxWidth = '100%';
+          img.style.height = 'auto';
+          section.appendChild(img);
+        } else if (mode === 'webpage') {
+          const iframe = document.createElement('iframe');
+          iframe.src = item[field];
+          iframe.style.width = '100%';
+          iframe.style.height = '60vh';
+          iframe.style.maxWidth = '100%';
+          iframe.style.minWidth = '375px';
+          iframe.style.border = '1px solid #ccc';
+          iframe.style.overflow = 'auto';
+          section.appendChild(iframe);
+        } else {
+          const unknown = document.createElement('div');
+          unknown.textContent = '(Unknown mode)';
+          section.appendChild(unknown);
+        }
+
+        wrapper.appendChild(section);
+      });
 
       updateCounter();
       renderCodeList();

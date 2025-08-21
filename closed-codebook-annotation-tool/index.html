@@ -4,14 +4,17 @@
   <meta charset="UTF-8" />
   <title>Closed Codebook Annotation Tool</title>
   <style>
+    html, body { height: 100%; }
     body {
       display: flex;
       font-family: sans-serif;
       margin: 0;
       padding: 20px;
       gap: 20px;
+      height: 100vh;
+      overflow: hidden;
     }
-    #left-panel, #right-panel { flex: 1; }
+    #left-panel, #right-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
     #text-box {
       background-color: #f0f0f0;
       color: black;
@@ -23,7 +26,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
+      flex: 1;
+      overflow: auto;
     }
     #text-box img { max-width: 100%; height: auto; }
     #text-box iframe {
@@ -42,12 +46,13 @@
     #save-status { font-size: 14px; }
     .saved { color: green; }
     .unsaved { color: red; }
-    #code-table { margin-top: 10px; border-collapse: collapse; width: 100%; }
+    #code-table { margin-top: 10px; border-collapse: collapse; width: 100%; max-height: none; }
     #code-table td, #code-table th { border: 1px solid #ddd; padding: 8px; }
     #code-table th { background-color: #f2f2f2; }
     #nav-buttons { margin-top: 20px; }
     #nav-buttons button { padding: 10px 20px; margin-right: 10px; }
     .error { color: red; margin-top: 5px; }
+    #codebook-scroll { flex: 1; min-height: 0; overflow: auto; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
     .modal-backdrop {
       position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center;
     }
@@ -79,20 +84,22 @@
   <div id="right-panel">
     <div><strong>Codebook (predefined):</strong></div>
     <div class="error" id="errorBox"></div>
-    <table id="code-table">
-      <thead>
-        <tr>
-          <th>Use</th>
-          <th>Code</th>
-          <th>Count</th>
-          <th>Learn more</th>
-          <th>Edit</th>
-          <th>Delete</th>
-          <th>Merge</th>
-        </tr>
-      </thead>
-      <tbody id="code-list"></tbody>
-    </table>
+    <div id="codebook-scroll">
+      <table id="code-table">
+        <thead>
+          <tr>
+            <th>Use</th>
+            <th>Code</th>
+            <th>Count</th>
+            <th>Learn more</th>
+            <th>Edit</th>
+            <th>Delete</th>
+            <th>Merge</th>
+          </tr>
+        </thead>
+        <tbody id="code-list"></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- Simple modal for Learn more -->
@@ -277,7 +284,7 @@
         tdUse.appendChild(chk);
 
         const tdCode = document.createElement('td');
-        tdCode.innerText = code;
+        tdCode.innerHTML = code;
 
         const tdCount = document.createElement('td');
         tdCount.innerText = countCodeUse(code);
@@ -306,7 +313,7 @@
           const select = document.createElement('select');
           otherCodes.forEach(c => {
             const opt = document.createElement('option');
-            opt.value = c; opt.innerText = c; select.appendChild(opt);
+            opt.value = c; opt.innerHTML = c; select.appendChild(opt);
           });
           const input = document.createElement('input');
           input.type = 'text'; input.placeholder = 'New code name';
@@ -349,7 +356,7 @@
     function showLearnMore(code) {
       const i = findCodebookIndexByCode(code);
       const entry = i >= 0 ? codebook[i] : { definition: '', example: '' };
-      document.getElementById('modal-title').innerText = code;
+      document.getElementById('modal-title').innerHTML = code;
       document.getElementById('modal-definition').innerText = entry.definition || '';
       document.getElementById('modal-example').innerText = entry.example || '';
       showModal();

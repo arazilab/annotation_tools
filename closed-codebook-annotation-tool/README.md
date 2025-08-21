@@ -1,165 +1,160 @@
-# Open Coding Annotation Tool
+# Closed Codebook Annotation Tool
 
-A simple browser-based tool for open coding and qualitative annotation.
+A browser-based tool for qualitative annotation using a **predefined
+codebook**.
 
----
+------------------------------------------------------------------------
 
 ## 🧩 Features
 
-- Annotate JSON data with multiple custom codes
-- Add, edit, delete, and merge codes
-- Automatically track how many datapoints each code appears in
-- Code suggestions and sorting by usage frequency
-- Add a Context note for each datapoint (saved in JSON)
-- Works entirely in your browser (no installs needed)
-- Supports text, image, or webpage annotation modes
-- Save and resume progress from JSON files
-- Save codebook as a `.json` file
+-   Annotate JSON data with codes from a given codebook (not open
+    coding).
+-   Codebook loaded from a separate JSON file with:
+    -   `code`: the code name
+    -   `definition`: explanation of the code
+    -   `example`: (optional) usage example
+-   Codes are shown in a fixed order from the codebook.
+-   Checkbox for assigning a code to the current datapoint.
+-   **Learn more** button to view definition and example.
+-   Edit, delete, and merge codes available.
+-   Tracks frequency of each code across the dataset.
+-   Works entirely in your browser (no installs needed).
+-   Save and resume progress from JSON files.
+-   Export updated codebook with definitions/examples.
 
----
+------------------------------------------------------------------------
 
 ## 🚀 How to Use
 
 ### 1. Start a local server
 
-From inside the `open-coding-tool` folder, run:
+From inside the folder, run:
 
-```bash
+``` bash
 python3 -m http.server 8000
 ```
 
 Then open in your browser:
 
-```
-http://localhost:8000
-```
+    http://localhost:8000
 
----
+------------------------------------------------------------------------
 
 ### 2. Files you need
 
-- `index.html`: main annotation interface
-- `config.json`: configuration for mode and fields
-- `sample_data.json`: your dataset
+-   `index.html`: main annotation interface
+-   `config.json`: configuration for mode, fields, and file names
+-   `sample_data.json`: your dataset
+-   `codebook.json`: your codebook
 
----
+------------------------------------------------------------------------
 
 ## 🔧 Sample `config.json`
 
-Choose one of the following modes: `text`, `image`, or `webpage`.
-
-```json
+``` json
 {
   "mode": "text",
   "fields": ["Review"],
-  "dataFile": "sample_data.json"
+  "dataFile": "sample_data.json",
+  "codebookFile": "codebook.json"
 }
 ```
 
-Example for `image` mode:
+Modes: `text`, `image`, or `webpage`.
 
-```json
-{
-  "mode": "image",
-  "fields": ["Image"],
-  "dataFile": "sample_data.json"
-}
-```
-
-Example for `webpage` mode:
-
-```json
-{
-  "mode": "webpage",
-  "fields": ["URL"],
-  "dataFile": "sample_data.json"
-}
-```
-
----
+------------------------------------------------------------------------
 
 ## 📄 Sample `sample_data.json`
 
-```json
+``` json
 [
   {
     "Stars": 4,
-    "Review": "This article about cats was fascinating. I didn’t know they could have different colored eyes.",
-    "Image": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/June_odd-eyed-cat.jpg/320px-June_odd-eyed-cat.jpg",
+    "Review": "This article about cats was fascinating.",
+    "Image": "https://upload.wikimedia.org/...jpg",
     "URL": "https://en.wikipedia.org/wiki/Cat"
   },
   {
     "Stars": 3,
-    "Review": "Stars are so beautiful. I spent hours reading about their lifecycle and formation.",
-    "Image": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Pleiades_large.jpg/320px-Pleiades_large.jpg",
+    "Review": "Stars are so beautiful.",
+    "Image": "https://upload.wikimedia.org/...jpg",
     "URL": "https://en.wikipedia.org/wiki/Star"
-  },
-  {
-    "Stars": 5,
-    "Review": "This article gave a great history of filmmaking. I love how cinema evolved over time.",
-    "Image": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Golde33443.jpg/320px-Golde33443.jpg",
-    "URL": "https://en.wikipedia.org/wiki/Film"
   }
 ]
 ```
 
----
+------------------------------------------------------------------------
+
+## 📘 Sample `codebook.json`
+
+``` json
+[
+  {
+    "code": "animal",
+    "definition": "Mentions of animals or animal-related content.",
+    "example": "The cat had different colored eyes."
+  },
+  {
+    "code": "astronomy",
+    "definition": "References to stars, planets, or space topics.",
+    "example": "I read about star formation."
+  }
+]
+```
+
+------------------------------------------------------------------------
 
 ## 💾 Save & Resume
 
-- Click **💾 Save** to export annotations  
-- Click **📁 Open** to resume from a previous file  
-- Each entry gets:
-  - an `annotation` key with a list of codes  
-  - a `context` key with the text entered in the **Context** box (empty string by default)
+-   Click **💾 Save** to export annotations.\
+-   Click **📁 Open** to resume from a previous annotated dataset.\
+-   Saved annotations include the codes used for each datapoint.
 
----
+Example saved entry:
 
-## 🗒 Context Field
-
-- Found under **New Code** input
-- Fixed height with vertical scroll
-- Stores additional notes or background information about the current datapoint
-- Saved to JSON as `"context": "your text here"`
-
-Example:
-
-```json
+``` json
 {
   "Stars": 4,
-  "Review": "This article about cats was fascinating. I didn’t know they could have different colored eyes.",
-  "annotation": ["animal", "interesting"],
-  "context": "Mention heterochromia in cats."
+  "Review": "This article about cats was fascinating.",
+  "annotation": ["animal"]
 }
 ```
 
----
+------------------------------------------------------------------------
 
 ## 🔁 Merging Codes
 
-- Click **Merge** next to a code
-- Choose a second code to merge with
-- Enter a name for the new merged code
-- The tool removes both old codes and replaces them across all entries
+-   Click **Merge** next to a code.
+-   Choose a second code and enter a name for the new merged code.
+-   Tool replaces old codes with the new one across all entries.
 
----
+------------------------------------------------------------------------
 
 ## 📘 Export Codebook
 
-- Click **📘 Save Codebook**
-- Downloads a `codebook.json` file with counts per code
+-   Click **📘 Save Codebook**.
+-   Downloads a `codebook.json` file with current codes, definitions,
+    and examples.
 
----
+------------------------------------------------------------------------
 
 ## ✅ Annotation Format
 
-Saved annotations now include both codes and optional context:
+Each entry will have an `annotation` field with a list of codes:
 
-```json
+``` json
 {
   "Stars": 4,
-  "Review": "This article about cats was fascinating. I didn’t know they could have different colored eyes.",
-  "annotation": ["animal", "interesting"],
-  "context": "Mention heterochromia in cats."
+  "Review": "This article about cats was fascinating.",
+  "annotation": ["animal"]
 }
 ```
+
+------------------------------------------------------------------------
+
+## 📝 Notes
+
+-   Works in your browser. No installation beyond a local server
+    required.
+-   The codebook is fixed at the start, but you may still edit, delete,
+    or merge codes if needed.

@@ -15,18 +15,20 @@
       overflow: hidden;
     }
     #left-panel, #right-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    #left-panel { overflow: auto; }
     #text-box {
       background-color: #f0f0f0;
       color: black;
       padding: 20px;
       border-radius: 10px;
-      min-height: 200px;
+      min-height: 0;
       border: 1px solid #ccc;
       margin-bottom: 20px;
       display: flex;
       align-items: center;
       justify-content: center;
-      flex: 1;
+      flex: 0 1 auto;
+      max-height: 60vh;
       overflow: auto;
     }
     #text-box img { max-width: 100%; height: auto; }
@@ -49,7 +51,22 @@
     #code-table { margin-top: 10px; border-collapse: collapse; width: 100%; max-height: none; }
     #code-table td, #code-table th { border: 1px solid #ddd; padding: 8px; }
     #code-table th { background-color: #f2f2f2; }
-    #nav-buttons { margin-top: 20px; }
+    #nav-buttons { 
+      margin-top: 20px; 
+      flex-shrink: 0; 
+      position: sticky; 
+      bottom: 0; 
+      background: #fff; 
+      padding: 10px 0; 
+      border-top: 1px solid #eee; 
+    }
+    #counter { 
+      flex-shrink: 0; 
+      position: sticky; 
+      bottom: 54px; 
+      background: #fff; 
+      padding: 6px 0; 
+    }
     #nav-buttons button { padding: 10px 20px; margin-right: 10px; }
     .error { color: red; margin-top: 5px; }
     #codebook-scroll { flex: 1; min-height: 0; overflow: auto; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
@@ -212,6 +229,7 @@
         label.textContent = `${field}:`;
         section.appendChild(label);
 
+        // Case-sensitive key lookup
         if (!(field in item)) {
           const missing = document.createElement('div');
           missing.textContent = '(Field not found in data)';

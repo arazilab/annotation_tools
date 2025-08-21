@@ -23,4 +23,7 @@ Assign freeform codes to text data. Supports adding, editing, deleting, and merg
 ### 3. [Reddit Annotation Tool](reddit-annotation-tool/)
 Specialized tool for annotating Reddit post-comment pairs. Automatically positions comment windows and supports open coding with social media-specific workflow optimizations.
 
+### 4.	[Closed Codebook Annotation Tool[(closed-codebook-annotation-tool/)
+Annotate text using a predefined codebook stored in JSON. Shows each code with its definition and example. Includes checkboxes to assign codes, plus edit, delete, and merge functions. Exports both annotated data and updated codebook.
+
 More tools will be added soon.

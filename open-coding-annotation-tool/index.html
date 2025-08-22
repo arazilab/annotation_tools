@@ -89,23 +89,29 @@
     #context-box { 
       margin-top: 12px; 
     }
+    #contextLabel {
+      font-weight: bold;
+      margin-bottom: 4px;
+      display: inline-block;
+    }
     #contextInput {
       width: 100%;
       height: 120px;          /* fixed height */
       overflow-y: auto;       /* vertical scroll */
       overflow-x: hidden;     /* no horizontal scroll */
-      resize: none;           /* keep height fixed for users */
+      resize: none;           /* keep height fixed */
       padding: 8px;
       border: 1px solid #ccc;
       border-radius: 6px;
       box-sizing: border-box;
-      background-color: #fff;
+      background: #fff;
       font-family: inherit;
       font-size: 14px;
       line-height: 1.4;
       white-space: pre-wrap;  /* wrap long lines */
       word-break: break-word;
     }
+    #contextInput:disabled { background: #f5f5f5; }
   </style>
 </head>
 <body>
@@ -134,12 +140,12 @@
     </div>
     <div class="error" id="errorBox"></div>
     <div id="context-box">
-      <div><strong>Context:</strong></div>
+      <div id="contextLabel">Context:</div>
       <textarea id="contextInput" placeholder="Add context for this item..."></textarea>
     </div>
     <div><strong>Existing codes:</strong></div>
     <table id="code-table">
-      <thead><tr><th>Code</th><th>Count</th><th>Use</th><th>Edit</th><th>Delete</th><th>Merge</th></tr></thead>
+      <thead><tr><th>Code</th><th>Count</th><th>Use</th><th>Context</th><th>Edit</th><th>Delete</th><th>Merge</th></tr></thead>
       <tbody id="code-list"></tbody>
     </table>
   </div>
@@ -147,11 +153,12 @@
   <script>
     let config, data = [], index = 0;
     let annotations = {};
-    let contexts = {};
+    let contexts = {}; // per-item dictionary: contexts[itemIndex][code] = string
     let codeSet = new Set();
     let originalFileName = '';
     let isSaved = false;
     let activeMergeRow = null;
+    let selectedContextCode = null; // which code is active in the textarea
 
     function updateSaveStatus() {
       const status = document.getElementById('save-status');
@@ -172,7 +179,7 @@
           data = json;
           data.forEach((_, i) => {
             annotations[i] = [];
-            contexts[i] = ""; // default empty context for each datapoint
+            contexts[i] = {}; // per-code context for each datapoint
           });
           render();
         });
@@ -223,8 +230,24 @@
     
       updateCounter();
       renderCodeList();
-      const ctxEl = document.getElementById('contextInput');
-      if (ctxEl) ctxEl.value = contexts[index] || "";
+
+      // Sync context textarea with current item and selection
+      (function syncContextBox() {
+        const ta = document.getElementById('contextInput');
+        const label = document.getElementById('contextLabel');
+        if (!ta || !label) return;
+        if (selectedContextCode && annotations[index].includes(selectedContextCode)) {
+          if (!contexts[index]) contexts[index] = {};
+          ta.disabled = false;
+          ta.value = contexts[index][selectedContextCode] || '';
+          label.textContent = 'Context for "' + selectedContextCode + '":';
+        } else {
+          selectedContextCode = null;
+          ta.disabled = true;
+          ta.value = '';
+          label.textContent = 'Context:';
+        }
+      })();
     }
 
     function updateCounter() {
@@ -243,6 +266,8 @@
       }
       codeSet.add(val);
       annotations[index].push(val);
+      if (!contexts[index]) contexts[index] = {};
+      if (!(val in contexts[index])) contexts[index][val] = '';
       document.getElementById('codeInput').value = '';
       isSaved = false;
       updateSaveStatus();
@@ -253,6 +278,17 @@
       const errorBox = document.getElementById('errorBox');
       errorBox.innerText = msg;
       setTimeout(() => errorBox.innerText = '', 3000);
+    }
+
+    function editContextForCode(code) {
+      selectedContextCode = code;
+      const ta = document.getElementById('contextInput');
+      const label = document.getElementById('contextLabel');
+      if (!contexts[index]) contexts[index] = {};
+      ta.disabled = false;
+      ta.value = contexts[index][code] || '';
+      label.textContent = 'Context for "' + code + '":';
+      ta.focus();
     }
 
     function renderCodeList() {
@@ -277,6 +313,14 @@
         chk.checked = annotations[index].includes(code);
         chk.onchange = () => toggleCode(code);
         td3.appendChild(chk);
+
+        const tdContext = document.createElement('td');
+        const ctxBtn = document.createElement('button');
+        ctxBtn.innerText = (contexts[index] && contexts[index][code] && contexts[index][code].length > 0) ? 'Context*' : 'Context';
+        ctxBtn.onclick = () => editContextForCode(code);
+        // Enable the button only if the code is used on the current item
+        ctxBtn.disabled = !annotations[index].includes(code);
+        tdContext.appendChild(ctxBtn);
 
         const td4 = document.createElement('td');
         const editBtn = document.createElement('button');
@@ -333,22 +377,10 @@
           td6.appendChild(mergeBtn);
         }
 
-        [td1, td2, td3, td4, td5, td6].forEach(td => tr.appendChild(td));
+        [td1, td2, td3, tdContext, td4, td5, td6].forEach(td => tr.appendChild(td));
         container.appendChild(tr);
       });
     }
-
-    // Keep context synced with current index
-    document.addEventListener('DOMContentLoaded', () => {
-      const ctxEl = document.getElementById('contextInput');
-      if (ctxEl) {
-        ctxEl.addEventListener('input', function () {
-          contexts[index] = this.value;
-          isSaved = false;
-          updateSaveStatus();
-        });
-      }
-    });
 
     function performMerge(code1, code2, newName) {
       if (!newName.trim()) return showError('You must enter a new code name.');
@@ -365,9 +397,29 @@
           set.delete(code2);
           set.add(newName);
           annotations[i] = Array.from(set);
+
+          if (!contexts[i]) contexts[i] = {};
+          const c1 = contexts[i][code1] || '';
+          const c2 = contexts[i][code2] || '';
+          if (c1 || c2) {
+            const combined = (c1 && c2) ? (c1 + ' ' + c2) : (c1 || c2);
+            contexts[i][newName] = combined.trim();
+          }
+          if (code1 in contexts[i]) delete contexts[i][code1];
+          if (code2 in contexts[i]) delete contexts[i][code2];
         }
       });
-
+      if (selectedContextCode === code1 || selectedContextCode === code2) {
+        selectedContextCode = newName;
+        const ta = document.getElementById('contextInput');
+        const label = document.getElementById('contextLabel');
+        if (!contexts[index]) contexts[index] = {};
+        if (ta && label) {
+          ta.disabled = false;
+          ta.value = contexts[index][newName] || '';
+          label.textContent = 'Context for "' + newName + '":';
+        }
+      }
       isSaved = false;
       activeMergeRow = null;
       updateSaveStatus();
@@ -377,10 +429,26 @@
     function toggleCode(code) {
       const list = annotations[index];
       const i = list.indexOf(code);
-      if (i === -1) list.push(code);
-      else list.splice(i, 1);
+      if (i === -1) {
+        list.push(code);
+        if (!contexts[index]) contexts[index] = {};
+        if (!(code in contexts[index])) contexts[index][code] = '';
+      } else {
+        list.splice(i, 1);
+        if (contexts[index] && code in contexts[index]) {
+          delete contexts[index][code];
+          if (selectedContextCode === code) {
+            const ta = document.getElementById('contextInput');
+            const label = document.getElementById('contextLabel');
+            selectedContextCode = null;
+            if (ta) { ta.value = ''; ta.disabled = true; }
+            if (label) label.textContent = 'Context:';
+          }
+        }
+      }
       isSaved = false;
       updateSaveStatus();
+      renderCodeList();
     }
 
     function editCode(oldCode) {
@@ -395,6 +463,24 @@
       Object.keys(annotations).forEach(i => {
         annotations[i] = annotations[i].map(c => c === oldCode ? newCode : c);
       });
+      Object.keys(contexts).forEach(i => {
+        if (contexts[i] && oldCode in contexts[i]) {
+          const val = contexts[i][oldCode];
+          delete contexts[i][oldCode];
+          contexts[i][newCode] = val;
+        }
+      });
+      if (selectedContextCode === oldCode) {
+        selectedContextCode = newCode;
+        const ta = document.getElementById('contextInput');
+        const label = document.getElementById('contextLabel');
+        if (!contexts[index]) contexts[index] = {};
+        if (ta && label) {
+          ta.disabled = false;
+          ta.value = contexts[index][newCode] || '';
+          label.textContent = 'Context for "' + newCode + '":';
+        }
+      }
       isSaved = false;
       updateSaveStatus();
       renderCodeList();
@@ -405,18 +491,38 @@
       codeSet.delete(code);
       Object.keys(annotations).forEach(i => {
         annotations[i] = annotations[i].filter(c => c !== code);
+        if (contexts[i] && code in contexts[i]) {
+          delete contexts[i][code];
+        }
       });
+      if (selectedContextCode === code) {
+        const ta = document.getElementById('contextInput');
+        const label = document.getElementById('contextLabel');
+        selectedContextCode = null;
+        if (ta) { ta.value = ''; ta.disabled = true; }
+        if (label) label.textContent = 'Context:';
+      }
       isSaved = false;
       updateSaveStatus();
       renderCodeList();
     }
 
     function saveAnnotations() {
-      const output = data.map((item, i) => ({
-        ...item,
-        annotation: annotations[i],
-        context: contexts[i] || ""
-      }));
+      const output = data.map((item, i) => {
+        const used = new Set(annotations[i] || []);
+        // keep only contexts for used codes
+        const ctxDict = {};
+        if (contexts[i]) {
+          Object.keys(contexts[i]).forEach(k => {
+            if (used.has(k)) ctxDict[k] = contexts[i][k];
+          });
+        }
+        return {
+          ...item,
+          annotation: annotations[i],
+          context: ctxDict
+        };
+      });
       const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -463,11 +569,37 @@
         data.forEach((item, i) => {
           annotations[i] = Array.isArray(item.annotation) ? item.annotation : [];
           (annotations[i] || []).forEach(code => codeSet.add(code));
-          contexts[i] = typeof item.context === 'string' ? item.context : "";
+          if (item && typeof item.context === 'object' && !Array.isArray(item.context)) {
+            contexts[i] = { ...item.context };
+          } else {
+            // legacy string context, attach to each used code for backward compatibility
+            const legacy = (typeof item.context === 'string') ? item.context : '';
+            const obj = {};
+            (Array.isArray(annotations[i]) ? annotations[i] : []).forEach(c => { obj[c] = legacy; });
+            contexts[i] = obj;
+          }
         });
         render();
       };
       reader.readAsText(this.files[0]);
+    });
+
+    // Live update of context textarea
+    document.addEventListener('DOMContentLoaded', () => {
+      const ta = document.getElementById('contextInput');
+      const label = document.getElementById('contextLabel');
+      // start disabled until a code is selected
+      ta.disabled = true;
+      label.textContent = 'Context:';
+      ta.addEventListener('input', () => {
+        if (!selectedContextCode) return;
+        if (!contexts[index]) contexts[index] = {};
+        contexts[index][selectedContextCode] = ta.value;
+        isSaved = false;
+        updateSaveStatus();
+        // Refresh code list so the Context button shows the asterisk when text exists
+        renderCodeList();
+      });
     });
 
     window.addEventListener('beforeunload', function (e) {

@@ -10,7 +10,7 @@ A simple browser-based tool for open coding and qualitative annotation.
 - Add, edit, delete, and merge codes
 - Automatically track how many datapoints each code appears in
 - Code suggestions and sorting by usage frequency
-- Add a Context note for each datapoint (saved in JSON)
+- Add a Context note for each datapoint (saved in JSON) 
 - Works entirely in your browser (no installs needed)
 - Supports text, image, or webpage annotation modes
 - Save and resume progress from JSON files

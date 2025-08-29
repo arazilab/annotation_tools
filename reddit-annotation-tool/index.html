@@ -814,8 +814,24 @@
       }
     });
 
-    // Keyboard shortcuts
+    // Helper to check if keyboard focus is in a form input or editable area
+    function isTypingInForm(el) {
+      if (!el) return false;
+      if (el.isContentEditable) return true;
+      const tag = el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+      // Also ignore if focus is inside any element marked as editable
+      if (el.closest('[contenteditable="true"], [contenteditable=""]')) return true;
+      return false;
+    }
+
+    // Keyboard shortcuts (arrow keys only)
     document.addEventListener('keydown', function(e) {
+      // Do not trigger shortcuts while the user is typing in a form control
+      if (isTypingInForm(e.target)) {
+        return; // let the keystroke pass through normally
+      }
+
       // Arrow keys for navigation
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
@@ -823,11 +839,6 @@
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
         prevItem();
-      }
-      // Spacebar to open comment window
-      else if (e.key === ' ' && e.target.tagName !== 'INPUT') {
-        e.preventDefault();
-        openCommentWindow();
       }
     });
 

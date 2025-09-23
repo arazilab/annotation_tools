@@ -1,0 +1,52 @@
+[
+  {
+    "Speaker": "Interviewer",
+    "Time": "00:00–00:10",
+    "Utterance": "Hello, thank you for joining us today."
+  },
+  {
+    "Speaker": "Participant",
+    "Time": "00:10–00:15",
+    "Utterance": "Thank you for having me."
+  },
+  {
+    "Speaker": "Interviewer",
+    "Time": "00:15–00:20",
+    "Utterance": "Could you tell us your name?"
+  },
+  {
+    "Speaker": "Participant",
+    "Time": "00:20–00:25",
+    "Utterance": "I'm Jane Smith."
+  },
+  {
+    "Speaker": "Interviewer",
+    "Time": "00:25–00:30",
+    "Utterance": "How old are you?"
+  },
+  {
+    "Speaker": "Participant",
+    "Time": "00:30–00:35",
+    "Utterance": "I'm 28 years old."
+  },
+  {
+    "Speaker": "Interviewer",
+    "Time": "00:35–00:45",
+    "Utterance": "What do you do in a typical day?"
+  },
+  {
+    "Speaker": "Participant",
+    "Time": "00:45–00:55",
+    "Utterance": "I work as a software engineer from nine to five."
+  },
+  {
+    "Speaker": "Interviewer",
+    "Time": "00:55–01:00",
+    "Utterance": "What do you do in your free time?"
+  },
+  {
+    "Speaker": "Participant",
+    "Time": "01:00–01:10",
+    "Utterance": "I enjoy painting and hiking on weekends."
+  }
+]

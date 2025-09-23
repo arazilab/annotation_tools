@@ -1,0 +1,5 @@
+{
+  "mode": "text",
+  "fields": ["Utterance"],
+  "dataFile": "sample_data.json"
+}

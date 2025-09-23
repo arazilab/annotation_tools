@@ -26,4 +26,7 @@ Specialized tool for annotating Reddit post-comment pairs. Automatically positio
 ### 4.	[Closed Codebook Annotation Tool](closed-codebook-annotation-tool/)
 Annotate text using a predefined codebook stored in JSON. Shows each code with its definition and example. Includes checkboxes to assign codes, plus edit, delete, and merge functions. Exports both annotated data and updated codebook.
 
+### 5. [Interview Annotation Tool](interview-annotation-tool/)
+Designed for annotating interview transcripts. Displays each utterance in focus with two preceding and two following turns in grey for context. 
+
 More tools will be added soon.

@@ -602,6 +602,24 @@
       });
     });
 
+    // Keyboard shortcuts: Arrow navigation + Ctrl+A / Ctrl+D
+    function isTypingInForm(el) {
+      if (!el) return false;
+      if (el.isContentEditable) return true;
+      const tag = el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+      if (el.closest && el.closest('[contenteditable="true"], [contenteditable=""]')) return true;
+      return false;
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (isTypingInForm(e.target)) return;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); nextItem(); return; }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); prevItem(); return; }
+      if (e.ctrlKey && (e.key === 'a' || e.key === 'A')) { e.preventDefault(); prevItem(); return; }
+      if (e.ctrlKey && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); nextItem(); return; }
+    });
+
     window.addEventListener('beforeunload', function (e) {
       const unsaved = Object.values(annotations).some(v => v.length === 0);
       if (!isSaved && unsaved) {

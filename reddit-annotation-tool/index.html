@@ -836,9 +836,23 @@
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
         nextItem();
+        return;
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
         prevItem();
+        return;
+      }
+
+      // Ctrl + A => previous, Ctrl + D => next
+      if (e.ctrlKey && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        prevItem();
+        return;
+      }
+      if (e.ctrlKey && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        nextItem();
+        return;
       }
     });
 

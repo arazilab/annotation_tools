@@ -1,5 +1,5 @@
 {
-  "mode": "text", // can be "text", "image", or "webpage"
+  "mode": "text", 
   "fields": ["Review"],
   "dataFile": "sample_data.json"
 }

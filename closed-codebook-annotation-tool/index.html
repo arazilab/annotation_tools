@@ -147,6 +147,15 @@
 
     function updateSaveStatus() {
       const status = document.getElementById('save-status');
+    // Keyboard shortcuts (arrow keys + Ctrl+A / Ctrl+D)
+    function isTypingInForm(el) {
+      if (!el) return false;
+      if (el.isContentEditable) return true;
+      const tag = el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+      if (el.closest && el.closest('[contenteditable="true"], [contenteditable=""]')) return true;
+      return false;
+    }
       status.textContent = isSaved ? '✓ All changes saved' : '✗ Unsaved Changes';
       status.className = isSaved ? 'saved' : 'unsaved';
     }

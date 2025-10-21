@@ -1,5 +1,5 @@
 {
   "mode": "text", 
-  "fields": ["comment_url"],
+  "fields": ["Review"],
   "dataFile": "sample_data.json"
 }

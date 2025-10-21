@@ -120,12 +120,28 @@
       <button onclick="saveAnnotations()">💾 Save</button>
       <button onclick="saveCodebook()">📘 Save Codebook</button>
       <button onclick="document.getElementById('fileInput').click()">📁 Open</button>
+  <button id="filterToggleBtn" onclick="toggleFilterPanel()">🔽 Filter</button>
       <span id="save-status" class="unsaved">✗ Unsaved Changes</span>
       <input type="file" id="fileInput" style="display:none" />
     </div>
 
     <div id="text-box">Loading...</div>
     <div id="counter"></div>
+    <div id="filter-panel" style="display:none; border:1px solid #ddd; padding:10px; margin-top:10px; background:#fff; max-height:320px; overflow:auto;">
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+  <label><strong>🔽 Filter</strong></label>
+        <label style="margin-left:auto">Mode:</label>
+        <select id="filterMode">
+          <option value="OR">OR</option>
+          <option value="AND">AND</option>
+        </select>
+      </div>
+      <div id="filter-code-list" style="display:flex; flex-direction:column; gap:4px"></div>
+      <div style="margin-top:8px; display:flex; gap:8px;">
+        <button onclick="applyFilter()">OK</button>
+        <button onclick="resetFilter()">Reset</button>
+      </div>
+    </div>
     <div id="nav-buttons">
       <button onclick="prevItem()">Previous</button>
       <button onclick="nextItem()">Next</button>
@@ -145,7 +161,6 @@
     </div>
     <div><strong>Existing codes:</strong></div>
     <table id="code-table">
-      <thead><tr><th>Code</th><th>Count</th><th>Use</th><th>Context</th><th>Edit</th><th>Delete</th><th>Merge</th></tr></thead>
       <tbody id="code-list"></tbody>
     </table>
   </div>
@@ -159,6 +174,11 @@
     let isSaved = false;
     let activeMergeRow = null;
     let selectedContextCode = null; // which code is active in the textarea
+  // Filtering state
+  let filterActive = false;
+  let filterMode = 'OR'; // OR or AND
+  let filterSet = new Set();
+  let filteredIndices = null; // null means no filter; otherwise array of data indices
 
     function updateSaveStatus() {
       const status = document.getElementById('save-status');
@@ -186,7 +206,7 @@
     }
 
     function render() {
-      const item = data[index];
+      const item = (filteredIndices && filteredIndices.length>0) ? data[filteredIndices[index]] : data[index];
       const container = document.getElementById('text-box');
       container.innerHTML = ''; // Clear old content
     
@@ -251,7 +271,7 @@
     }
 
     function updateCounter() {
-      const total = data.length;
+      const total = filteredIndices ? filteredIndices.length : data.length;
       const annotated = Object.values(annotations).filter(a => a.length > 0).length;
       document.getElementById('counter').innerText =
         `Seen: ${index + 1} / ${total}, Annotated: ${annotated}, Left: ${total - annotated}`;
@@ -292,93 +312,260 @@
     }
 
     function renderCodeList() {
+      // Hierarchical view: themes -> codes -> subcodes
       const container = document.getElementById('code-list');
       container.innerHTML = '';
 
-      const sortedCodes = Array.from(codeSet).sort((a, b) => countCodeUse(b) - countCodeUse(a));
+      // Parse all codeSet entries into a hierarchy
+      function parseCodeString(raw) {
+        const s = String(raw).trim();
+        if (!s) return { raw: s, theme: null, code: null, sub: null };
+        if (s.includes(':')) {
+          const parts = s.split(':');
+          const theme = parts.shift().trim();
+          const rest = parts.join(':').trim();
+          if (rest.includes('_')) {
+            const [codePart, subPart] = rest.split('_');
+            return { raw: s, theme, code: codePart.trim(), sub: subPart.trim() };
+          }
+          return { raw: s, theme, code: rest.trim(), sub: null };
+        }
+        // no colon -> theme-only
+        return { raw: s, theme: s, code: null, sub: null };
+      }
 
-      sortedCodes.forEach(code => {
-        const tr = document.createElement('tr');
-        tr.dataset.code = code;
+      // Build hierarchy map
+      const hierarchy = {}; // theme -> { codes: { code -> Set(subcodes/null) }, themeOnlyExists: bool }
+      Array.from(codeSet).forEach(raw => {
+        const p = parseCodeString(raw);
+        if (!p.theme) return;
+        if (!hierarchy[p.theme]) hierarchy[p.theme] = { codes: {}, themeOnly: false };
+        if (!p.code) {
+          hierarchy[p.theme].themeOnly = true;
+        } else {
+          if (!hierarchy[p.theme].codes[p.code]) hierarchy[p.theme].codes[p.code] = new Set();
+          if (p.sub) hierarchy[p.theme].codes[p.code].add(p.sub); else hierarchy[p.theme].codes[p.code].add(null);
+        }
+      });
 
-        const td1 = document.createElement('td');
-        td1.innerText = code;
+      // Helpers to get raw strings under nodes and counts
+      function rawStringsUnderTheme(theme) {
+        const raws = [];
+        Array.from(codeSet).forEach(r => { const p = parseCodeString(r); if (p.theme === theme) raws.push(r); });
+        return raws;
+      }
+      function rawStringsUnderCode(theme, code) {
+        const raws = [];
+        Array.from(codeSet).forEach(r => { const p = parseCodeString(r); if (p.theme === theme && p.code === code) raws.push(r); });
+        return raws;
+      }
 
-        const td2 = document.createElement('td');
-        td2.innerText = countCodeUse(code);
+      function countRawList(list) { return list.reduce((acc, r) => acc + countCodeUse(r), 0); }
 
-        const td3 = document.createElement('td');
-        const chk = document.createElement('input');
-        chk.type = 'checkbox';
-        chk.checked = annotations[index].includes(code);
-        chk.onchange = () => toggleCode(code);
-        td3.appendChild(chk);
+      // Render themes
+      Object.keys(hierarchy).sort().forEach(theme => {
+        const themeRow = document.createElement('tr');
+        const tdTheme = document.createElement('td');
+        tdTheme.colSpan = 7;
+        const details = document.createElement('details');
+        details.open = true;
+        const summary = document.createElement('summary');
+        summary.style.fontWeight = 'bold';
+        const themeLabel = document.createElement('span');
+        themeLabel.innerText = theme;
+        summary.appendChild(themeLabel);
 
-        const tdContext = document.createElement('td');
-        const ctxBtn = document.createElement('button');
-        ctxBtn.innerText = (contexts[index] && contexts[index][code] && contexts[index][code].length > 0) ? 'Context*' : 'Context';
-        ctxBtn.onclick = () => editContextForCode(code);
-        // Enable the button only if the code is used on the current item
-        ctxBtn.disabled = !annotations[index].includes(code);
-        tdContext.appendChild(ctxBtn);
+        // Theme controls
+        const themeControls = document.createElement('span');
+        themeControls.style.marginLeft = '12px';
 
-        const td4 = document.createElement('td');
-        const editBtn = document.createElement('button');
-        editBtn.innerText = 'Edit';
-        editBtn.onclick = () => editCode(code);
-        td4.appendChild(editBtn);
+        const themeCount = countRawList(rawStringsUnderTheme(theme));
+        const countSpan = document.createElement('span');
+        countSpan.style.marginLeft = '8px';
+        countSpan.innerText = `Count: ${themeCount}`;
+        themeControls.appendChild(countSpan);
 
-        const td5 = document.createElement('td');
-        const delBtn = document.createElement('button');
-        delBtn.innerText = 'Delete';
-        delBtn.onclick = () => deleteCode(code);
-        td5.appendChild(delBtn);
+        // Use checkbox for theme (creates theme-only raw if needed)
+        const useChk = document.createElement('input');
+        useChk.type = 'checkbox';
+        const themeRaw = Array.from(codeSet).find(r => parseCodeString(r).raw === theme) || theme;
+        useChk.checked = annotations[index].includes(themeRaw);
+        useChk.onchange = () => {
+          // ensure codeSet contains themeRaw
+          if (!codeSet.has(themeRaw)) { codeSet.add(themeRaw); }
+          toggleCode(themeRaw);
+          renderCodeList();
+        };
+        themeControls.appendChild(useChk);
 
-        const td6 = document.createElement('td');
+        const editBtn = document.createElement('button'); editBtn.innerText = 'Edit';
+        editBtn.onclick = () => {
+          const newTheme = prompt('Edit theme name:', theme);
+          if (!newTheme || newTheme === theme) return;
+          // rename all entries with this theme
+          const toUpdate = Array.from(codeSet).filter(r => parseCodeString(r).theme === theme);
+          toUpdate.forEach(raw => {
+            const p = parseCodeString(raw);
+            let newRaw;
+            if (!p.code) newRaw = newTheme;
+            else if (!p.sub) newRaw = `${newTheme}: ${p.code}`;
+            else newRaw = `${newTheme}: ${p.code}_${p.sub}`;
+            codeSet.delete(raw); codeSet.add(newRaw);
+            // update annotations
+            Object.keys(annotations).forEach(i => {
+              annotations[i] = (annotations[i] || []).map(x => x === raw ? newRaw : x);
+            });
+            // update contexts
+            if (typeof contexts === 'object') {
+              Object.keys(contexts).forEach(i => {
+                if (contexts[i] && raw in contexts[i]) { contexts[i][newRaw] = contexts[i][raw]; delete contexts[i][raw]; }
+              });
+            }
+          });
+          isSaved = false; updateSaveStatus(); renderCodeList();
+        };
+        themeControls.appendChild(editBtn);
 
-        if (activeMergeRow === code) {
-          const otherCodes = sortedCodes.filter(c => c !== code);
-          const select = document.createElement('select');
-          otherCodes.forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c;
-            opt.innerText = c;
-            select.appendChild(opt);
+        const delBtn = document.createElement('button'); delBtn.innerText = 'Delete';
+        delBtn.onclick = () => {
+          if (!confirm(`Delete theme "${theme}" and all its codes?`)) return;
+          const toRemove = Array.from(codeSet).filter(r => parseCodeString(r).theme === theme);
+          toRemove.forEach(raw => { codeSet.delete(raw); Object.keys(annotations).forEach(i => { annotations[i] = (annotations[i]||[]).filter(x=>x!==raw); }); if (typeof contexts === 'object') Object.keys(contexts).forEach(i=>{ if (contexts[i] && raw in contexts[i]) delete contexts[i][raw]; }); });
+          isSaved = false; updateSaveStatus(); renderCodeList();
+        };
+        themeControls.appendChild(delBtn);
+
+        summary.appendChild(themeControls);
+        details.appendChild(summary);
+
+        // Append codes under theme
+        const codes = hierarchy[theme].codes;
+        Object.keys(codes).sort().forEach(code => {
+          const codeDiv = document.createElement('div');
+          codeDiv.style.paddingLeft = '18px';
+          const codeDetails = document.createElement('details'); codeDetails.open = true;
+          const codeSummary = document.createElement('summary');
+          codeSummary.innerText = code;
+
+          // code controls
+          const codeControls = document.createElement('span');
+          codeControls.style.marginLeft = '12px';
+          const codeCount = countRawList(rawStringsUnderCode(theme, code));
+          const codeCountSpan = document.createElement('span'); codeCountSpan.innerText = `Count: ${codeCount}`; codeControls.appendChild(codeCountSpan);
+
+          const codeRaw = Array.from(codeSet).find(r => { const p=parseCodeString(r); return p.theme===theme && p.code===code && !p.sub; }) || `${theme}: ${code}`;
+          const codeChk = document.createElement('input'); codeChk.type='checkbox'; codeChk.checked = annotations[index].includes(codeRaw);
+          codeChk.onchange = () => { if (!codeSet.has(codeRaw)) codeSet.add(codeRaw); toggleCode(codeRaw); renderCodeList(); };
+          codeControls.appendChild(codeChk);
+
+          const codeEdit = document.createElement('button'); codeEdit.innerText='Edit';
+          codeEdit.onclick = () => {
+            // Prompt with full path: Theme / Code
+            const input = prompt(`Edit code (format: Theme:Code). Current: ${theme}:${code}`, `${theme}:${code}`);
+            if (!input) return;
+            const val = input.trim();
+            // parse into theme and code
+            let newTheme = theme;
+            let newCode = code;
+            if (val.includes(':')) {
+              const parts = val.split(':'); newTheme = parts.shift().trim(); newCode = parts.join(':').trim();
+            } else {
+              newCode = val;
+            }
+            if (newTheme === theme && newCode === code) return;
+            // rename/move all entries with this theme+code
+            const toUpdate = Array.from(codeSet).filter(r=>{const p=parseCodeString(r); return p.theme===theme && p.code===code;});
+            toUpdate.forEach(raw=>{
+              const p = parseCodeString(raw);
+              let newRaw;
+              if (!p.sub) newRaw = `${newTheme}: ${newCode}`;
+              else newRaw = `${newTheme}: ${newCode}_${p.sub}`;
+              codeSet.delete(raw); codeSet.add(newRaw);
+              Object.keys(annotations).forEach(i=>{ annotations[i]=(annotations[i]||[]).map(x=>x===raw?newRaw:x); });
+              if (typeof contexts==='object') Object.keys(contexts).forEach(i=>{ if (contexts[i] && raw in contexts[i]){ contexts[i][newRaw]=contexts[i][raw]; delete contexts[i][raw]; } });
+            });
+            isSaved=false; updateSaveStatus(); renderCodeList();
+          };
+          codeControls.appendChild(codeEdit);
+
+          const codeDel = document.createElement('button'); codeDel.innerText='Delete';
+          codeDel.onclick = ()=>{
+            if (!confirm(`Delete code "${code}" and its subcodes?`)) return;
+            const toRemove = Array.from(codeSet).filter(r=>{const p=parseCodeString(r); return p.theme===theme && p.code===code;});
+            toRemove.forEach(raw=>{ codeSet.delete(raw); Object.keys(annotations).forEach(i=>{ annotations[i]=(annotations[i]||[]).filter(x=>x!==raw); }); if (typeof contexts==='object') Object.keys(contexts).forEach(i=>{ if (contexts[i] && raw in contexts[i]) delete contexts[i][raw]; }); });
+            isSaved=false; updateSaveStatus(); renderCodeList();
+          };
+          codeControls.appendChild(codeDel);
+
+          codeSummary.appendChild(codeControls);
+          codeDetails.appendChild(codeSummary);
+
+          // render subcodes
+          const subList = document.createElement('div'); subList.style.paddingLeft='24px';
+          const subcodes = Array.from(codes[code]).filter(x=>x!==null).sort();
+          subcodes.forEach(sub => {
+            const subRaw = `${theme}: ${code}_${sub}`;
+            const row = document.createElement('div');
+            row.style.display='flex'; row.style.gap='8px'; row.style.alignItems='center';
+            const lbl = document.createElement('div'); lbl.innerText = sub; lbl.style.minWidth='120px';
+            const cnt = document.createElement('div'); cnt.innerText = `Count: ${countCodeUse(subRaw)}`;
+            const chk = document.createElement('input'); chk.type='checkbox'; chk.checked = annotations[index].includes(subRaw); chk.onchange = ()=>{ toggleCode(subRaw); renderCodeList(); };
+            const ctxBtn = document.createElement('button'); ctxBtn.innerText = (contexts[index]&&contexts[index][subRaw]&&contexts[index][subRaw].length>0)?'Context*':'Context'; ctxBtn.onclick=()=>editContextForCode(subRaw); ctxBtn.disabled = !annotations[index].includes(subRaw);
+            const editBtn2 = document.createElement('button'); editBtn2.innerText='Edit'; editBtn2.onclick = () => {
+              // Prompt with full path format: Theme:Code_Sub (allows moving)
+              const input = prompt(`Edit subcode (format: Theme:Code_Sub). Current: ${theme}:${code}_${sub}`, `${theme}:${code}_${sub}`);
+              if (!input) return;
+              const val = input.trim();
+              let newTheme = theme, newCode = code, newSub = sub;
+              if (val.includes(':')) {
+                const parts = val.split(':'); newTheme = parts.shift().trim(); const rest = parts.join(':').trim();
+                if (rest.includes('_')) { const [c, s] = rest.split('_'); newCode = c.trim(); newSub = s.trim(); }
+                else { newCode = rest.trim(); newSub = null; }
+              } else if (val.includes('_')) { const [c, s] = val.split('_'); newCode = c.trim(); newSub = s.trim(); }
+              else { newSub = val; }
+              const newRaw = newSub ? `${newTheme}: ${newCode}_${newSub}` : `${newTheme}: ${newCode}`;
+              // Apply change: replace subRaw -> newRaw across codeSet, annotations and contexts
+              codeSet.delete(subRaw); codeSet.add(newRaw);
+              Object.keys(annotations).forEach(i => { annotations[i] = (annotations[i] || []).map(x => x === subRaw ? newRaw : x); });
+              if (typeof contexts === 'object') Object.keys(contexts).forEach(i => { if (contexts[i] && subRaw in contexts[i]) { contexts[i][newRaw] = contexts[i][subRaw]; delete contexts[i][subRaw]; } });
+              isSaved = false; updateSaveStatus(); renderCodeList();
+            };
+            const delBtn2 = document.createElement('button'); delBtn2.innerText='Delete'; delBtn2.onclick=()=>{
+              if (!confirm(`Delete subcode "${sub}"?`)) return; codeSet.delete(subRaw); Object.keys(annotations).forEach(i=>{ annotations[i]=(annotations[i]||[]).filter(x=>x!==subRaw); }); if (typeof contexts==='object') Object.keys(contexts).forEach(i=>{ if (contexts[i] && subRaw in contexts[i]) delete contexts[i][subRaw]; }); isSaved=false; updateSaveStatus(); renderCodeList(); };
+            const mergeBtn = document.createElement('button'); mergeBtn.innerText='Merge'; mergeBtn.onclick=()=>{
+              // set active merge to this subRaw and re-render; when activeMergeRow is present we show selector elsewhere
+              activeMergeRow = subRaw; renderCodeList();
+            };
+            row.appendChild(chk); row.appendChild(lbl); row.appendChild(cnt); row.appendChild(ctxBtn); row.appendChild(editBtn2); row.appendChild(delBtn2); row.appendChild(mergeBtn);
+            subList.appendChild(row);
           });
 
-          const input = document.createElement('input');
-          input.type = 'text';
-          input.placeholder = 'New code name';
+          // If activeMergeRow === some subraw under this theme, render merge UI next to this code
+          if (activeMergeRow && parseCodeString(activeMergeRow).theme===theme && parseCodeString(activeMergeRow).code===code) {
+            const otherSubs = subcodes.filter(s=>`${theme}: ${code}_${s}` !== activeMergeRow);
+            const mergeDiv = document.createElement('div'); mergeDiv.style.paddingLeft='12px'; mergeDiv.style.marginTop='6px';
+            const select = document.createElement('select'); otherSubs.forEach(s => { const opt=document.createElement('option'); opt.value=s; opt.innerText=s; select.appendChild(opt); });
+            const input = document.createElement('input'); input.type='text'; input.placeholder='New subcode name';
+            const confirm = document.createElement('button'); confirm.innerText='Confirm'; confirm.onclick=()=>{
+              const selected = select.value; const newSub = input.value.trim(); if (!newSub) return alert('Enter a new name'); const src = activeMergeRow; const tgt = `${theme}: ${code}_${selected}`;
+              const newRaw = `${theme}: ${code}_${newSub}`;
+              // perform merge only if both subcodes belong to same theme+code
+              performMerge(src, tgt, newRaw);
+              activeMergeRow = null; renderCodeList();
+            };
+            const cancel = document.createElement('button'); cancel.innerText='Cancel'; cancel.onclick=()=>{ activeMergeRow=null; renderCodeList(); };
+            mergeDiv.appendChild(select); mergeDiv.appendChild(input); mergeDiv.appendChild(confirm); mergeDiv.appendChild(cancel);
+            subList.appendChild(mergeDiv);
+          }
 
-          const confirm = document.createElement('button');
-          confirm.innerText = 'Confirm';
-          confirm.onclick = () => performMerge(code, select.value, input.value);
+          codeDetails.appendChild(subList);
+          codeDiv.appendChild(codeDetails);
+          details.appendChild(codeDiv);
+        });
 
-          const cancel = document.createElement('button');
-          cancel.innerText = 'Cancel';
-          cancel.onclick = () => {
-            activeMergeRow = null;
-            renderCodeList();
-          };
-
-          td6.appendChild(select);
-          td6.appendChild(document.createElement('br'));
-          td6.appendChild(input);
-          td6.appendChild(document.createElement('br'));
-          td6.appendChild(confirm);
-          td6.appendChild(cancel);
-        } else {
-          const mergeBtn = document.createElement('button');
-          mergeBtn.innerText = 'Merge';
-          mergeBtn.onclick = () => {
-            activeMergeRow = code;
-            renderCodeList();
-          };
-          td6.appendChild(mergeBtn);
-        }
-
-        [td1, td2, td3, tdContext, td4, td5, td6].forEach(td => tr.appendChild(td));
-        container.appendChild(tr);
+        tdTheme.appendChild(details);
+        themeRow.appendChild(tdTheme);
+        container.appendChild(themeRow);
       });
     }
 
@@ -424,6 +611,52 @@
       activeMergeRow = null;
       updateSaveStatus();
       renderCodeList();
+    }
+
+    // Helper: rename/move a raw code string to newRaw across codeSet, annotations and contexts
+    function renameRaw(oldRaw, newRaw) {
+      if (!oldRaw || !newRaw) return;
+      if (oldRaw === newRaw) return;
+      const oldExists = codeSet.has(oldRaw);
+      const newExists = codeSet.has(newRaw);
+      if (!newExists) codeSet.add(newRaw);
+      // Move usages and contexts
+      Object.keys(annotations).forEach(i => {
+        const list = annotations[i] || [];
+        const hasOld = list.includes(oldRaw);
+        if (hasOld) {
+          const set = new Set(list);
+          set.delete(oldRaw);
+          set.add(newRaw);
+          annotations[i] = Array.from(set);
+        }
+        if (!contexts[i]) contexts[i] = {};
+        const cOld = contexts[i][oldRaw] || '';
+        const cNew = contexts[i][newRaw] || '';
+        if (cOld) {
+          const combined = cNew ? (cNew + ' ' + cOld) : cOld;
+          contexts[i][newRaw] = combined.trim();
+          if (oldRaw in contexts[i]) delete contexts[i][oldRaw];
+        }
+      });
+      // Remove old from codeSet
+      if (oldExists) codeSet.delete(oldRaw);
+      if (selectedContextCode === oldRaw) selectedContextCode = newRaw;
+      isSaved = false; updateSaveStatus();
+    }
+
+    function deleteRaw(raw) {
+      if (!raw) return;
+      if (codeSet.has(raw)) codeSet.delete(raw);
+      Object.keys(annotations).forEach(i => { annotations[i] = (annotations[i]||[]).filter(x => x !== raw); });
+      if (typeof contexts === 'object') Object.keys(contexts).forEach(i => { if (contexts[i] && raw in contexts[i]) delete contexts[i][raw]; });
+      if (selectedContextCode === raw) {
+        selectedContextCode = null;
+        const ta = document.getElementById('contextInput'); const label = document.getElementById('contextLabel');
+        if (ta) { ta.value = ''; ta.disabled = true; }
+        if (label) label.textContent = 'Context:';
+      }
+      isSaved = false; updateSaveStatus();
     }
 
     function toggleCode(code) {
@@ -549,7 +782,8 @@
     }
 
     function nextItem() {
-      index = Math.min(index + 1, data.length - 1);
+      const total = filteredIndices ? filteredIndices.length : data.length;
+      index = Math.min(index + 1, total - 1);
       render();
     }
 
@@ -567,12 +801,20 @@
         codeSet.clear();
         contexts = {};
         data.forEach((item, i) => {
-          annotations[i] = Array.isArray(item.annotation) ? item.annotation : [];
+          // Normalize backwards-compatible inputs: if annotation is an array of strings without ':' treat each as a theme-only raw
+          const rawList = Array.isArray(item.annotation) ? item.annotation : [];
+          const normalized = rawList.map(r => {
+            const s = String(r||'').trim();
+            if (!s) return s;
+            if (s.includes(':') || s.includes('_')) return s; // already hierarchical-ish
+            // treat as theme-only
+            return s;
+          });
+          annotations[i] = normalized;
           (annotations[i] || []).forEach(code => codeSet.add(code));
           if (item && typeof item.context === 'object' && !Array.isArray(item.context)) {
             contexts[i] = { ...item.context };
           } else {
-            // legacy string context, attach to each used code for backward compatibility
             const legacy = (typeof item.context === 'string') ? item.context : '';
             const obj = {};
             (Array.isArray(annotations[i]) ? annotations[i] : []).forEach(c => { obj[c] = legacy; });
@@ -583,6 +825,55 @@
       };
       reader.readAsText(this.files[0]);
     });
+
+    // --- Filter helpers ---
+    function toggleFilterPanel() {
+      const panel = document.getElementById('filter-panel');
+      if (!panel) return;
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      if (panel.style.display === 'block') renderFilterCodeList();
+    }
+
+    function renderFilterCodeList() {
+      const container = document.getElementById('filter-code-list');
+      container.innerHTML = '';
+      const codes = Array.from(codeSet).sort();
+      codes.forEach(c => {
+        const row = document.createElement('label');
+        row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.gap = '8px';
+        const chk = document.createElement('input'); chk.type = 'checkbox'; chk.value = c; chk.checked = filterSet.has(c);
+        chk.onchange = () => { if (chk.checked) filterSet.add(c); else filterSet.delete(c); };
+        row.appendChild(chk);
+        const span = document.createElement('span'); span.innerText = c;
+        row.appendChild(span);
+        container.appendChild(row);
+      });
+      const modeEl = document.getElementById('filterMode'); if (modeEl) modeEl.value = filterMode;
+    }
+
+    function applyFilter() {
+      const modeEl = document.getElementById('filterMode'); if (modeEl) filterMode = modeEl.value;
+      if (!filterSet || filterSet.size === 0) { filterActive = false; filteredIndices = null; index = 0; render(); toggleFilterPanel(); return; }
+      filterActive = true;
+      const selected = Array.from(filterSet);
+      filteredIndices = [];
+      for (let i = 0; i < data.length; i++) {
+        const ann = annotations[i] || [];
+        if (filterMode === 'OR') {
+          if (selected.some(s => ann.includes(s))) filteredIndices.push(i);
+        } else {
+          // AND
+          if (selected.every(s => ann.includes(s))) filteredIndices.push(i);
+        }
+      }
+      index = 0; // go to first result
+      toggleFilterPanel();
+      render();
+    }
+
+    function resetFilter() {
+      filterActive = false; filterMode = 'OR'; filterSet = new Set(); filteredIndices = null; index = 0; render(); renderFilterCodeList();
+    }
 
     // Live update of context textarea
     document.addEventListener('DOMContentLoaded', () => {

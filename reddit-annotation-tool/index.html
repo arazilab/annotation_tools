@@ -246,7 +246,6 @@
       <button onclick="saveAnnotations()">💾 Save</button>
       <button onclick="saveCodebook()">📘 Save Codebook</button>
       <button onclick="document.getElementById('fileInput').click()">📁 Open</button>
-  <button id="filterToggleBtn" onclick="toggleFilterPanel()">🔽 Filter</button>
       <span id="save-status" class="unsaved">✗ Unsaved Changes</span>
       <input type="file" id="fileInput" style="display:none" />
     </div>
@@ -277,11 +276,6 @@
   <!-- Post Row -->
   <div id="post-row">
     <div id="post-textbox">Loading post content...</div>
-  </div>
-  <div id="filter-panel" style="display:none; position:fixed; right:20px; top:80px; width:320px; max-height:70vh; overflow:auto; background:#fff; border:1px solid #ddd; padding:10px; z-index:2000;">
-  <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;"><strong>🔽 Filter</strong><label style="margin-left:auto">Mode:</label><select id="filterMode"><option value="OR">OR</option><option value="AND">AND</option></select></div>
-    <div id="filter-code-list" style="display:flex; flex-direction:column; gap:4px; max-height:60vh; overflow:auto;"></div>
-    <div style="margin-top:8px; display:flex; gap:8px;"><button onclick="applyFilter()">OK</button><button onclick="resetFilter()">Reset</button></div>
   </div>
 
   <!-- Bottom Left: Nav buttons -->
@@ -323,11 +317,6 @@
     let activeMergeRow = null;
     let selectedContextCode = null; // which code is active in the textarea
     let currentCommentWindow = null;
-  // Filtering state
-  let filterActive = false;
-  let filterMode = 'OR';
-  let filterSet = new Set();
-  let filteredIndices = null;
 
     function openCommentWindow(autoOpened = false) {
       const item = data[index];
@@ -418,7 +407,7 @@
     }
 
     function render() {
-      const item = (filteredIndices && filteredIndices.length>0) ? data[filteredIndices[index]] : data[index];
+      const item = data[index];
       
       // Display comment URL
       const urlDisplay = document.getElementById('comment-url-display');
@@ -466,7 +455,7 @@
     }
 
     function updateCounter() {
-      const total = filteredIndices ? filteredIndices.length : data.length;
+      const total = data.length;
       const annotated = Object.values(annotations).filter(a => a.length > 0).length;
       document.getElementById('counter').innerText =
         `Seen: ${index + 1} / ${total}, Annotated: ${annotated}, Left: ${total - annotated}`;
@@ -937,8 +926,7 @@
     }
 
     function nextItem() {
-      const total = filteredIndices ? filteredIndices.length : data.length;
-      if (index < total - 1) {
+      if (index < data.length - 1) {
         index++;
         render();
         
@@ -994,24 +982,7 @@
       reader.readAsText(this.files[0]);
     });
 
-    // Filter helpers
-    function toggleFilterPanel() {
-      const p = document.getElementById('filter-panel'); if (!p) return; p.style.display = p.style.display === 'none' ? 'block' : 'none'; if (p.style.display==='block') renderFilterCodeList();
-    }
-    function renderFilterCodeList() {
-      const container = document.getElementById('filter-code-list'); container.innerHTML = '';
-      const codes = Array.from(codeSet).sort();
-      codes.forEach(c=>{ const row=document.createElement('label'); row.style.display='flex'; row.style.gap='8px'; const chk=document.createElement('input'); chk.type='checkbox'; chk.value=c; chk.checked=filterSet.has(c); chk.onchange=()=>{ if(chk.checked) filterSet.add(c); else filterSet.delete(c); }; row.appendChild(chk); const s=document.createElement('span'); s.innerText=c; row.appendChild(s); container.appendChild(row); });
-      const me = document.getElementById('filterMode'); if (me) me.value = filterMode;
-    }
-    function applyFilter() {
-      const me = document.getElementById('filterMode'); if (me) filterMode = me.value;
-      if (!filterSet || filterSet.size===0) { filterActive=false; filteredIndices=null; index=0; toggleFilterPanel(); render(); return; }
-      filterActive=true; const selected=Array.from(filterSet); filteredIndices=[];
-      for(let i=0;i<data.length;i++){ const ann = annotations[i] || []; if (filterMode==='OR'){ if (selected.some(s=>ann.includes(s))) filteredIndices.push(i); } else { if (selected.every(s=>ann.includes(s))) filteredIndices.push(i); } }
-      index=0; toggleFilterPanel(); render();
-    }
-    function resetFilter(){ filterActive=false; filterMode='OR'; filterSet=new Set(); filteredIndices=null; index=0; renderFilterCodeList(); render(); }
+
     // Keep context synced with selected code
     document.addEventListener('DOMContentLoaded', () => {
       const ctxEl = document.getElementById('contextInput');

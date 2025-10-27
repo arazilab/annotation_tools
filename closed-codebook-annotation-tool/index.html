@@ -86,7 +86,6 @@
       <button onclick="saveAnnotations()">💾 Save</button>
       <button onclick="saveCodebook()">📘 Save Codebook</button>
       <button onclick="document.getElementById('fileInput').click()">📁 Open</button>
-  <button id="filterToggleBtn" onclick="toggleFilterPanel()">🔽 Filter</button>
       <span id="save-status" class="unsaved">✗ Unsaved Changes</span>
       <input type="file" id="fileInput" style="display:none" />
     </div>
@@ -96,21 +95,6 @@
     <div id="nav-buttons">
       <button onclick="prevItem()">Previous</button>
       <button onclick="nextItem()">Next</button>
-    </div>
-    <div id="filter-panel" style="display:none; border:1px solid #ddd; padding:10px; margin-top:10px; background:#fff; max-height:320px; overflow:auto;">
-      <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
-  <label><strong>🔽 Filter</strong></label>
-        <label style="margin-left:auto">Mode:</label>
-        <select id="filterMode">
-          <option value="OR">OR</option>
-          <option value="AND">AND</option>
-        </select>
-      </div>
-      <div id="filter-code-list" style="display:flex; flex-direction:column; gap:4px"></div>
-      <div style="margin-top:8px; display:flex; gap:8px;">
-        <button onclick="applyFilter()">OK</button>
-        <button onclick="resetFilter()">Reset</button>
-      </div>
     </div>
   </div>
 
@@ -160,11 +144,6 @@
     let codeSet = new Set();      // quick presence
     let activeMergeRow = null;
     let originalFileName = '';
-  // Filtering state
-  let filterActive = false;
-  let filterMode = 'OR';
-  let filterSet = new Set();
-  let filteredIndices = null;
 
     function updateSaveStatus() {
       const status = document.getElementById('save-status');
@@ -227,8 +206,7 @@
     }
 
     function render() {
-      const actualIdx = (filteredIndices && filteredIndices.length>0) ? filteredIndices[index] : index;
-      const item = data[actualIdx];
+      const item = data[index];
       const container = document.getElementById('text-box');
       container.innerHTML = '';
 
@@ -304,7 +282,7 @@
     }
 
     function updateCounter() {
-      const total = filteredIndices ? filteredIndices.length : data.length;
+      const total = data.length;
       const annotated = Object.values(annotations).filter(a => a.length > 0).length;
       document.getElementById('counter').innerText =
         `Seen: ${index + 1} / ${total}, Annotated: ${annotated}, Left: ${total - annotated}`;
@@ -512,7 +490,7 @@
       a.click();
     }
 
-  function nextItem() { const total = filteredIndices ? filteredIndices.length : data.length; index = Math.min(index + 1, total - 1); render(); }
+  function nextItem() { index = Math.min(index + 1, data.length - 1); render(); }
   function prevItem() { index = Math.max(index - 1, 0); render(); }
 
     document.getElementById('fileInput').addEventListener('change', function () {
@@ -525,18 +503,11 @@
           annotations[i] = Array.isArray(item.annotation) ? item.annotation : [];
         });
         // keep current codebook
-        // reset any active filters when loading a new file
-        filterActive = false; filterMode = 'OR'; filterSet = new Set(); filteredIndices = null; index = 0;
+        index = 0;
         isSaved = false; updateSaveStatus(); render();
       };
       if (this.files && this.files[0]) reader.readAsText(this.files[0]);
     });
-
-    // Filter helpers
-    function toggleFilterPanel() { const panel = document.getElementById('filter-panel'); if (!panel) return; panel.style.display = panel.style.display==='none'?'block':'none'; if (panel.style.display==='block') renderFilterCodeList(); }
-    function renderFilterCodeList() { const container = document.getElementById('filter-code-list'); if(!container) return; container.innerHTML = ''; const codes = codeOrder.slice().filter(c=>codeSet.has(c)).sort(); codes.forEach(c=>{ const row=document.createElement('label'); row.style.display='flex'; row.style.gap='8px'; const chk=document.createElement('input'); chk.type='checkbox'; chk.value=c; chk.checked=filterSet.has(c); chk.onchange=()=>{ if(chk.checked) filterSet.add(c); else filterSet.delete(c); }; row.appendChild(chk); const s=document.createElement('span'); s.innerText=c; row.appendChild(s); container.appendChild(row); }); const me = document.getElementById('filterMode'); if (me) me.value=filterMode; }
-    function applyFilter(){ const me=document.getElementById('filterMode'); if(me) filterMode=me.value; if(!filterSet||filterSet.size===0){ filterActive=false; filteredIndices=null; index=0; toggleFilterPanel(); render(); return; } filterActive=true; const selected=Array.from(filterSet); filteredIndices=[]; for(let i=0;i<data.length;i++){ const ann = annotations[i] || []; if(filterMode==='OR'){ if(selected.some(s=>ann.includes(s))) filteredIndices.push(i); } else { if(selected.every(s=>ann.includes(s))) filteredIndices.push(i); } } index=0; toggleFilterPanel(); render(); }
-    function resetFilter(){ filterActive=false; filterMode='OR'; filterSet=new Set(); filteredIndices=null; index=0; renderFilterCodeList(); render(); }
 
     window.addEventListener('beforeunload', function (e) {
       if (!isSaved) {

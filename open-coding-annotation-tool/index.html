@@ -183,13 +183,19 @@
       const sb = (sub || '').trim();
       if (!t) return '';
       if (!c) return t;
-      const base = `${t}: ${c}`;
+      // Normalize separators so we never keep spaces around ":" or "_"
+      const base = `${t}:${c}`;
       return sb ? `${base}_${sb}` : base;
     }
 
     function canonicalizeCodeRaw(raw) {
       const parsed = parseCodeString(raw);
       return buildRaw(parsed.theme, parsed.code, parsed.sub);
+    }
+
+    // Ensure user-entered strings are canonical before we store or compare them
+    function sanitizeUserInput(raw) {
+      return canonicalizeCodeRaw(raw);
     }
 
     function findRaw(theme, code, sub) {
@@ -208,6 +214,55 @@
         });
       });
       codeSet = next;
+    }
+
+    // Normalize all stored codes/contexts so delimiters never keep stray spaces
+    function normalizeAllCodes() {
+      let changed = false;
+      Object.keys(annotations || {}).forEach(i => {
+        const list = Array.isArray(annotations[i]) ? annotations[i] : [];
+        const seen = new Set();
+        const normalized = [];
+        list.forEach(raw => {
+          const canonical = canonicalizeCodeRaw(raw);
+          if (!canonical) return;
+          if (!seen.has(canonical)) {
+            seen.add(canonical);
+            normalized.push(canonical);
+          }
+          if (canonical !== raw) changed = true;
+        });
+        if (normalized.length !== list.length) changed = true;
+        annotations[i] = normalized;
+
+        const ctx = (contexts && contexts[i] && typeof contexts[i] === 'object') ? contexts[i] : {};
+        const newCtx = {};
+        Object.keys(ctx).forEach(key => {
+          const canonicalKey = canonicalizeCodeRaw(key);
+          if (!canonicalKey) return;
+          const val = ctx[key];
+          if (canonicalKey in newCtx && val) {
+            newCtx[canonicalKey] = (newCtx[canonicalKey] + ' ' + val).trim();
+          } else if (!(canonicalKey in newCtx)) {
+            newCtx[canonicalKey] = val;
+          }
+          if (canonicalKey !== key) changed = true;
+        });
+        contexts[i] = newCtx;
+      });
+
+      if (selectedContextCode) {
+        const canonicalSelected = canonicalizeCodeRaw(selectedContextCode);
+        if (!canonicalSelected || !annotations[index] || !annotations[index].includes(canonicalSelected)) {
+          selectedContextCode = null;
+        } else if (canonicalSelected !== selectedContextCode) {
+          selectedContextCode = canonicalSelected;
+          changed = true;
+        }
+      }
+
+      refreshCodeSetFromAnnotations();
+      if (changed) { isSaved = false; updateSaveStatus(); }
     }
     function updateSaveStatus() {
       const status = document.getElementById('save-status');
@@ -235,6 +290,8 @@
     }
 
     function render() {
+      // Ensure all codes/contexts are canonical before drawing
+      normalizeAllCodes();
       const item = data[index];
       const container = document.getElementById('text-box');
       container.innerHTML = ''; // Clear old content
@@ -309,7 +366,7 @@
     function addCode() {
       const val = document.getElementById('codeInput').value.trim();
       if (!val) return;
-      const canonical = canonicalizeCodeRaw(val);
+      const canonical = sanitizeUserInput(val);
       if (!canonical) return;
       if (codeSet.has(canonical)) {
         showError('Code already exists.');
@@ -319,7 +376,7 @@
       annotations[index].push(canonical);
       if (!contexts[index]) contexts[index] = {};
       if (!(canonical in contexts[index])) contexts[index][canonical] = '';
-      document.getElementById('codeInput').value = '';
+      document.getElementById('codeInput').value = canonical;
       isSaved = false;
       updateSaveStatus();
       renderCodeList();
@@ -474,26 +531,20 @@
             // Prompt with full path: Theme / Code
             const input = prompt(`Edit code (format: Theme:Code). Current: ${theme}:${code}`, `${theme}:${code}`);
             if (!input) return;
-            const val = input.trim();
-            // parse into theme and code
-            let newTheme = theme;
-            let newCode = code;
-            if (val.includes(':')) {
-              const parts = val.split(':'); newTheme = parts.shift().trim(); newCode = parts.join(':').trim();
-            } else {
-              newCode = val;
-            }
-            if (newTheme === theme && newCode === code) return;
-            // rename/move all entries with this theme+code
+            const canonicalNew = sanitizeUserInput(input);
+            if (!canonicalNew) return;
+            const newParsed = parseCodeString(canonicalNew);
+            if (!newParsed.theme || !newParsed.code) return;
+            if (newParsed.theme === theme && newParsed.code === code && !newParsed.sub) return;
+
             const toUpdate = Array.from(codeSet).filter(r=>{const p=parseCodeString(r); return p.theme===theme && p.code===code;});
             toUpdate.forEach(raw=>{
               const p = parseCodeString(raw);
-              const newRaw = buildRaw(newTheme, newCode, p.sub);
-              codeSet.delete(raw); codeSet.add(newRaw);
-              Object.keys(annotations).forEach(i=>{ annotations[i]=(annotations[i]||[]).map(x=>x===raw?newRaw:x); });
-              if (typeof contexts==='object') Object.keys(contexts).forEach(i=>{ if (contexts[i] && raw in contexts[i]){ contexts[i][newRaw]=contexts[i][raw]; delete contexts[i][raw]; } });
+              const subForNew = p.sub ? p.sub : newParsed.sub;
+              const newRaw = buildRaw(newParsed.theme, newParsed.code, subForNew);
+              renameRaw(raw, newRaw);
             });
-            isSaved=false; updateSaveStatus(); renderCodeList();
+            renderCodeList();
           };
           codeControls.appendChild(codeEdit);
 
@@ -524,20 +575,10 @@
               // Prompt with full path format: Theme:Code_Sub (allows moving)
               const input = prompt(`Edit subcode (format: Theme:Code_Sub). Current: ${theme}:${code}_${sub}`, `${theme}:${code}_${sub}`);
               if (!input) return;
-              const val = input.trim();
-              let newTheme = theme, newCode = code, newSub = sub;
-              if (val.includes(':')) {
-                const parts = val.split(':'); newTheme = parts.shift().trim(); const rest = parts.join(':').trim();
-                if (rest.includes('_')) { const [c, s] = rest.split('_'); newCode = c.trim(); newSub = s.trim(); }
-                else { newCode = rest.trim(); newSub = null; }
-              } else if (val.includes('_')) { const [c, s] = val.split('_'); newCode = c.trim(); newSub = s.trim(); }
-              else { newSub = val; }
-              const newRaw = buildRaw(newTheme, newCode, newSub);
-              // Apply change: replace subRaw -> newRaw across codeSet, annotations and contexts
-              codeSet.delete(subRaw); codeSet.add(newRaw);
-              Object.keys(annotations).forEach(i => { annotations[i] = (annotations[i] || []).map(x => x === subRaw ? newRaw : x); });
-              if (typeof contexts === 'object') Object.keys(contexts).forEach(i => { if (contexts[i] && subRaw in contexts[i]) { contexts[i][newRaw] = contexts[i][subRaw]; delete contexts[i][subRaw]; } });
-              isSaved = false; updateSaveStatus(); renderCodeList();
+              const canonicalNew = sanitizeUserInput(input);
+              if (!canonicalNew) return;
+              renameRaw(subRaw, canonicalNew);
+              renderCodeList();
             };
             const delBtn2 = document.createElement('button'); delBtn2.innerText='Delete'; delBtn2.onclick=()=>{
               if (!confirm(`Delete subcode "${sub}"?`)) return; codeSet.delete(subRaw); Object.keys(annotations).forEach(i=>{ annotations[i]=(annotations[i]||[]).filter(x=>x!==subRaw); }); if (typeof contexts==='object') Object.keys(contexts).forEach(i=>{ if (contexts[i] && subRaw in contexts[i]) delete contexts[i][subRaw]; }); isSaved=false; updateSaveStatus(); renderCodeList(); };
@@ -631,6 +672,8 @@
     function renameRaw(oldRaw, newRaw) {
       if (!oldRaw || !newRaw) return;
       if (oldRaw === newRaw) return;
+      newRaw = sanitizeUserInput(newRaw);
+      oldRaw = canonicalizeCodeRaw(oldRaw);
       const oldExists = codeSet.has(oldRaw);
       const newExists = codeSet.has(newRaw);
       if (!newExists) codeSet.add(newRaw);
@@ -693,63 +736,6 @@
             if (label) label.textContent = 'Context:';
           }
         }
-      }
-      isSaved = false;
-      updateSaveStatus();
-      renderCodeList();
-    }
-
-    function editCode(oldCode) {
-      const newCode = prompt('Edit code:', oldCode);
-      const canonicalNew = canonicalizeCodeRaw(newCode);
-      if (!canonicalNew || canonicalNew === oldCode) return;
-      if (codeSet.has(canonicalNew)) {
-        showError('That code already exists.');
-        return;
-      }
-      codeSet.delete(oldCode);
-      codeSet.add(canonicalNew);
-      Object.keys(annotations).forEach(i => {
-        annotations[i] = annotations[i].map(c => c === oldCode ? canonicalNew : c);
-      });
-      Object.keys(contexts).forEach(i => {
-        if (contexts[i] && oldCode in contexts[i]) {
-          const val = contexts[i][oldCode];
-          delete contexts[i][oldCode];
-          contexts[i][canonicalNew] = val;
-        }
-      });
-      if (selectedContextCode === oldCode) {
-        selectedContextCode = canonicalNew;
-        const ta = document.getElementById('contextInput');
-        const label = document.getElementById('contextLabel');
-        if (!contexts[index]) contexts[index] = {};
-        if (ta && label) {
-          ta.disabled = false;
-          ta.value = contexts[index][canonicalNew] || '';
-          label.textContent = 'Context for "' + canonicalNew + '":';
-        }
-      }
-      isSaved = false;
-      updateSaveStatus();
-      renderCodeList();
-    }
-
-    function deleteCode(code) {
-      if (!confirm(`Delete code "${code}" from all entries?`)) return;
-      codeSet.delete(code);
-      Object.keys(annotations).forEach(i => {
-        annotations[i] = annotations[i].filter(c => c !== code);
-        if (contexts[i] && code in contexts[i]) {
-          delete contexts[i][code];
-        }
-      });
-      if (selectedContextCode === code) {
-        const ta = document.getElementById('contextInput');
-        const label = document.getElementById('contextLabel');
-        selectedContextCode = null;
-        if (ta) { ta.value = ''; ta.disabled = true; }
-        if (label) label.textContent = 'Context:';
       }
       isSaved = false;
       updateSaveStatus();

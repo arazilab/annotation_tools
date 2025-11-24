@@ -1,5 +1,5 @@
 {
   "mode": "text", 
-  "fields": ["Review"],
+  "fields": ["selftext"],
   "dataFile": "sample_data.json"
 }

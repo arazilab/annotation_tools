@@ -15,6 +15,7 @@ A simple browser-based tool for open coding and qualitative annotation.
 - Supports text, image, or webpage annotation modes
 - Save and resume progress from JSON files
 - Save codebook as a `.json` file
+- Hierarchical codes supported: `Theme`, `Theme: Code`, `Theme: Code_Sub`
 
 ---
 
@@ -75,6 +76,15 @@ Example for `webpage` mode:
   "dataFile": "sample_data.json"
 }
 ```
+
+---
+
+## 🧭 Code format & hierarchy
+
+- Theme only: `Wellbeing`
+- Theme + Code: `Wellbeing: Sleep`
+- Theme + Code + Subcode: `Wellbeing: Sleep_Routine`
+- Editing, deleting, and merging use these canonical forms (spacing normalized), and the codebook view refreshes to show only codes that exist in your annotations.
 
 ---
 

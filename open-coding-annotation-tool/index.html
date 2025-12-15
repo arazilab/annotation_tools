@@ -77,6 +77,18 @@
       gap: 10px;
       margin-top: 10px;
     }
+    #code-search {
+      margin: 12px 0 6px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    #codeSearchInput {
+      flex: 1;
+      padding: 6px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
     input[type=text] {
       flex: 1;
       padding: 5px;
@@ -144,6 +156,15 @@
       <textarea id="contextInput" placeholder="Add context for this item..."></textarea>
     </div>
     <div><strong>Existing codes:</strong></div>
+    <div id="code-search">
+      <input
+        type="text"
+        id="codeSearchInput"
+        placeholder="Search codes (theme, code, or subcode)..."
+        oninput="handleCodeSearch()"
+      />
+      <button onclick="clearCodeSearch()">Clear</button>
+    </div>
     <table id="code-table">
       <tbody id="code-list"></tbody>
     </table>
@@ -158,6 +179,7 @@
     let isSaved = false;
     let activeMergeRow = null;
     let selectedContextCode = null; // which code is active in the textarea
+    let codeSearchTerm = '';
 
     // --- Helpers for handling code strings consistently ---
     function parseCodeString(raw) {
@@ -388,6 +410,19 @@
       setTimeout(() => errorBox.innerText = '', 3000);
     }
 
+    function handleCodeSearch() {
+      const input = document.getElementById('codeSearchInput');
+      codeSearchTerm = input ? input.value : '';
+      renderCodeList();
+    }
+
+    function clearCodeSearch() {
+      const input = document.getElementById('codeSearchInput');
+      if (input) input.value = '';
+      codeSearchTerm = '';
+      renderCodeList();
+    }
+
     function editContextForCode(code) {
       selectedContextCode = code;
       const ta = document.getElementById('contextInput');
@@ -405,9 +440,51 @@
       container.innerHTML = '';
       refreshCodeSetFromAnnotations();
 
+      const searchTerm = codeSearchTerm.trim().toLowerCase();
+      const allCodes = Array.from(codeSet);
+      const matchedThemes = new Set();
+      const matchedThemeCodes = new Set();
+
+      if (searchTerm) {
+        allCodes.forEach(raw => {
+          const p = parseCodeString(raw);
+          if (p.theme && p.theme.toLowerCase().includes(searchTerm)) matchedThemes.add(p.theme);
+          if (p.theme && p.code && p.code.toLowerCase().includes(searchTerm)) {
+            matchedThemeCodes.add(p.theme + '|||' + p.code);
+          }
+        });
+      }
+
+      function matchesSearch(raw) {
+        if (!searchTerm) return true;
+        const p = parseCodeString(raw);
+        return [p.theme, p.code, p.sub, raw].some(part =>
+          part && String(part).toLowerCase().includes(searchTerm)
+        );
+      }
+
+      const displayCodes = searchTerm
+        ? allCodes.filter(raw => {
+            const p = parseCodeString(raw);
+            if (matchesSearch(raw)) return true;
+            if (matchedThemes.has(p.theme)) return true;
+            if (p.code && matchedThemeCodes.has(p.theme + '|||' + p.code)) return true;
+            return false;
+          })
+        : allCodes;
+
+      if (searchTerm && displayCodes.length === 0) {
+        const row = document.createElement('tr');
+        const td = document.createElement('td');
+        td.innerText = 'No codes match your search.';
+        row.appendChild(td);
+        container.appendChild(row);
+        return;
+      }
+
       // Build hierarchy map
       const hierarchy = {}; // theme -> { codes: { code -> Set(subcodes/null) }, themeOnlyExists: bool }
-      Array.from(codeSet).forEach(raw => {
+      displayCodes.forEach(raw => {
         const p = parseCodeString(raw);
         if (!p.theme) return;
         if (!hierarchy[p.theme]) hierarchy[p.theme] = { codes: {}, themeOnly: false };
@@ -422,12 +499,12 @@
       // Helpers to get raw strings under nodes and counts
       function rawStringsUnderTheme(theme) {
         const raws = [];
-        Array.from(codeSet).forEach(r => { const p = parseCodeString(r); if (p.theme === theme) raws.push(r); });
+        allCodes.forEach(r => { const p = parseCodeString(r); if (p.theme === theme) raws.push(r); });
         return raws;
       }
       function rawStringsUnderCode(theme, code) {
         const raws = [];
-        Array.from(codeSet).forEach(r => { const p = parseCodeString(r); if (p.theme === theme && p.code === code) raws.push(r); });
+        allCodes.forEach(r => { const p = parseCodeString(r); if (p.theme === theme && p.code === code) raws.push(r); });
         return raws;
       }
 
@@ -802,6 +879,9 @@
         annotations = {};
         codeSet.clear();
         contexts = {};
+        codeSearchTerm = '';
+        const searchInput = document.getElementById('codeSearchInput');
+        if (searchInput) searchInput.value = '';
         data.forEach((item, i) => {
           const rawList = Array.isArray(item.annotation) ? item.annotation : [];
           const normalized = rawList

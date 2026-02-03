@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Transcript → JSON (Interview Annotation Tool)</title>
+  <style>
+    body {
+      display: flex;
+      font-family: sans-serif;
+      margin: 0;
+      padding: 20px;
+      gap: 20px;
+      box-sizing: border-box;
+      height: 100vh;
+    }
+    #left-panel, #right-panel {
+      flex: 1;
+      min-width: 0;
+    }
+    .panel-title {
+      font-weight: bold;
+      margin: 0 0 8px 0;
+    }
+
+    /* Transcript input (with line numbers) */
+    .editor-shell {
+      background-color: #ffffff;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      overflow: hidden;
+      height: calc(100vh - 72px);
+      display: flex;
+    }
+    .gutter {
+      width: 56px;
+      padding: 14px 10px 14px 12px;
+      border-right: 1px solid #eee;
+      background: #fafafa;
+      color: #777;
+      overflow: hidden;
+      user-select: none;
+      text-align: right;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 14px;
+      line-height: 1.45;
+      white-space: pre;
+      box-sizing: border-box;
+    }
+    #transcriptInput {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      outline: none;
+      padding: 14px;
+      resize: none;
+      overflow: auto;
+      box-sizing: border-box;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 14px;
+      line-height: 1.45;
+      white-space: pre;
+    }
+
+    /* Right panel UI */
+    #convertBtn {
+      width: 100%;
+      padding: 18px 16px;
+      font-size: 18px;
+      font-weight: 700;
+      border-radius: 10px;
+      border: 1px solid #bbb;
+      background: #f2f2f2;
+      cursor: pointer;
+    }
+    #convertBtn:active { transform: translateY(1px); }
+
+    .box {
+      margin-top: 14px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 12px;
+      background: #fff;
+    }
+    .box-title {
+      font-weight: bold;
+      margin: 0 0 6px 0;
+    }
+    .muted {
+      color: #555;
+      font-size: 14px;
+      line-height: 1.4;
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    #statusText.ok { color: #145a2a; }
+    #statusText.err { color: #8a1c1c; }
+  </style>
+</head>
+<body>
+  <div id="left-panel">
+    <div class="panel-title">Transcript (one line per utterance)</div>
+    <div class="editor-shell" aria-label="Transcript editor">
+      <div id="lineNumbers" class="gutter">1</div>
+      <textarea id="transcriptInput" spellcheck="false" placeholder="Interviewer: Hello, thank you for joining us today.
+Participant: Thank you for having me."></textarea>
+    </div>
+  </div>
+
+  <div id="right-panel">
+    <div class="panel-title">Convert to JSON</div>
+    <button id="convertBtn" type="button">Convert</button>
+
+    <div class="box" role="note" aria-label="Format help">
+      <div class="box-title">Expected format</div>
+      <p class="muted">
+Each non-empty line must be:
+{speaker}: {utterance}
+
+Example:
+Interviewer: What do you do in a typical day?
+Participant: I work as a software engineer from nine to five.
+      </p>
+    </div>
+
+    <div class="box" aria-label="Conversion status">
+      <div class="box-title">Status</div>
+      <p id="statusText" class="muted">Paste a transcript on the left, then click “Convert”.</p>
+    </div>
+  </div>
+
+  <script>
+    const transcriptInput = document.getElementById('transcriptInput');
+    const lineNumbers = document.getElementById('lineNumbers');
+    const convertBtn = document.getElementById('convertBtn');
+    const statusText = document.getElementById('statusText');
+
+    function setStatus(kind, text) {
+      statusText.classList.remove('ok', 'err');
+      if (kind) statusText.classList.add(kind);
+      statusText.textContent = text;
+    }
+
+    function getLines() {
+      // Keep original line numbers stable for error reporting.
+      return String(transcriptInput.value || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    }
+
+    function updateLineNumbers() {
+      const lineCount = Math.max(1, getLines().length);
+      const nums = [];
+      for (let i = 1; i <= lineCount; i++) nums.push(String(i));
+      lineNumbers.textContent = nums.join('\n');
+    }
+
+    function syncScroll() {
+      lineNumbers.scrollTop = transcriptInput.scrollTop;
+    }
+
+    function parseLine(rawLine) {
+      // Parse letter-by-letter until the first ':'.
+      let colonIndex = -1;
+      for (let i = 0; i < rawLine.length; i++) {
+        if (rawLine[i] === ':') { colonIndex = i; break; }
+      }
+      if (colonIndex === -1) return { ok: false, reason: 'Missing ":" separator.' };
+      const speaker = rawLine.slice(0, colonIndex).trim();
+      const utterance = rawLine.slice(colonIndex + 1).trim();
+      if (!speaker) return { ok: false, reason: 'Speaker is empty (nothing before ":").' };
+      if (!utterance) return { ok: false, reason: 'Utterance is empty (nothing after ":").' };
+      return { ok: true, speaker, utterance };
+    }
+
+    function linePreview(line) {
+      const s = String(line).trim();
+      if (!s) return '(empty)';
+      return s.length <= 80 ? s : (s.slice(0, 77) + '…');
+    }
+
+    function downloadJson(filename, data) {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+
+    function convert() {
+      const lines = getLines();
+      const output = [];
+      const errors = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const rawLine = lines[i];
+        if (!rawLine || rawLine.trim() === '') continue;
+
+        const parsed = parseLine(rawLine);
+        if (!parsed.ok) {
+          errors.push({
+            lineNumber: i + 1,
+            preview: linePreview(rawLine),
+            reason: parsed.reason
+          });
+          continue;
+        }
+
+        output.push({
+          Speaker: parsed.speaker,
+          Utterance: parsed.utterance
+        });
+      }
+
+      if (output.length === 0 && errors.length === 0) {
+        setStatus('err', 'No content found. Paste a transcript (one utterance per line) and try again.');
+        return;
+      }
+
+      if (errors.length > 0) {
+        const first = errors[0];
+        const more = errors.length > 1 ? `\n\n(+${errors.length - 1} more error(s) not shown)` : '';
+        setStatus(
+          'err',
+          `Conversion failed.\n\nLine ${first.lineNumber}: ${first.reason}\nStarts with: ${first.preview}${more}`
+        );
+        return;
+      }
+
+      const filename = 'transcript.json';
+      downloadJson(filename, output);
+      setStatus('ok', `Conversion successful.\n\nCreated ${output.length} item(s) and downloaded "${filename}". Check your browser Downloads, then load it using the annotation tool’s “Open” button.`);
+    }
+
+    transcriptInput.addEventListener('input', updateLineNumbers);
+    transcriptInput.addEventListener('scroll', syncScroll);
+    convertBtn.addEventListener('click', convert);
+
+    // Initialize
+    updateLineNumbers();
+    syncScroll();
+  </script>
+</body>
+</html>
+
